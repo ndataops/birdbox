@@ -1,0 +1,4 @@
+name: birdbox
+type: duckdb
+options:
+  filename: ../../../data/lakehouse.duckdb

@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: fct_bird_detections
+    description: "Analytics-ready bird detections, confidence-tiered, excludes mic-testing dates."
+    columns:
+      - name: detection_id
+        tests:
+          - not_null
+          - unique
+      - name: confidence_tier
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['High', 'Medium', 'Low']
+      - name: confidence_score
+        tests:
+          - not_null
+
+  - name: fct_detections_with_weather
+    description: "Bird detections joined to the nearest BME280 reading within a 15-minute window."
+    columns:
+      - name: detection_id
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('fct_bird_detections')
+                field: detection_id
+
+  - name: fct_daily_alerts
+    description: "High-confidence first-of-day species sightings, surfaced as New Arrivals."
+    columns:
+      - name: detection_id
+        tests:
+          - not_null
+          - unique
+      - name: confidence_score
+        tests:
+          - not_null

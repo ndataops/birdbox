@@ -1,0 +1,21 @@
+name: 'birdbox_lakehouse'
+version: '1.0.0'
+config-version: 2
+
+profile: 'birdbox'
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  birdbox_lakehouse:
+    bronze:
+      +materialized: view
+    silver:
+      +materialized: table
+    gold:
+      +materialized: table

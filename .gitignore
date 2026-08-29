@@ -1,0 +1,46 @@
+# Environments / virtualenvs
+venv/
+dagster_env/
+node_modules/
+
+# Dagster runtime state
+dagster_home/
+*.log
+
+# Data — never commit actual data or databases
+data/
+minio-data/
+*.duckdb
+*.db
+*.parquet
+
+# dbt artifacts
+dbt-project/target/
+dbt-project/logs/
+dbt-project/.user.yml
+
+# Evidence build output and cache
+field-journal/build/
+field-journal/.evidence/
+
+# Secrets — never commit, even though we use env_var() everywhere
+.env
+*.env
+!.env.example
+
+# Deprecated/legacy — quarantined credential scripts from earlier session
+_deprecated_scripts/
+
+# Empty/abandoned experiment
+cube_semantic_layer/
+
+# OS/editor cruft
+.DS_Store
+.vscode/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Dagster telemetry
+birdbox_pipeline/.telemetry/

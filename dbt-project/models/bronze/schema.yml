@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: stg_birdnet_detections
+    description: "Raw BirdNET-Go detections joined to species labels, synced from birdedge via MinIO."
+    columns:
+      - name: raw_id
+        description: "Primary key from BirdNET-Go's SQLite detections table."
+        tests:
+          - not_null
+          - unique
+      - name: detected_at
+        tests:
+          - not_null
+      - name: common_name
+        tests:
+          - not_null
+
+  - name: stg_telemetry
+    description: "Raw BME280 sensor readings synced from birdedge."
+    columns:
+      - name: recorded_at
+        tests:
+          - not_null
+      - name: temperature_f
+        tests:
+          - not_null

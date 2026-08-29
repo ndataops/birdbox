@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: int_bird_detections_cleaned
+    description: "Cleaned bird detections with normalized scientific names."
+    columns:
+      - name: detection_id
+        description: "Primary key, renamed from raw_id."
+        tests:
+          - not_null
+          - unique
+      - name: detected_at
+        tests:
+          - not_null
+      - name: scientific_name
+        tests:
+          - not_null
+
+  - name: int_telemetry_cleaned
+    description: "Cleaned telemetry readings, localized to America/Chicago."
+    columns:
+      - name: recorded_at
+        tests:
+          - not_null
