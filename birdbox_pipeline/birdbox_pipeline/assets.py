@@ -101,3 +101,43 @@ def evidence_build(context: AssetExecutionContext) -> None:
     if build.returncode != 0:
         raise Exception(f"Evidence build failed: {build.stderr}")
     context.log.info("Evidence static site rebuilt")
+
+
+@asset(deps=[evidence_build])
+def update_readme(context: AssetExecutionContext) -> None:
+    """Regenerates the auto-updating stats block in README.md and pushes to GitHub."""
+    result = subprocess.run(
+        ["/opt/birdbox/venv/bin/python3", "/opt/birdbox/scripts/update_readme_stats.py"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        raise Exception(f"README update failed: {result.stderr}")
+    context.log.info(result.stdout.strip())
+
+
+import shutil as shutil_module
+from datetime import datetime
+
+BACKUP_DIR = "/opt/birdbox/data/backups"
+LAKEHOUSE_PATH = "/opt/birdbox/data/lakehouse.duckdb"
+MAX_BACKUPS = 7
+
+@asset
+def backup_lakehouse(context: AssetExecutionContext) -> None:
+    """Nightly backup of the DuckDB lakehouse file, keeping the last 7 days."""
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = f"{BACKUP_DIR}/lakehouse_{timestamp}.duckdb"
+
+    shutil_module.copy2(LAKEHOUSE_PATH, backup_path)
+    context.log.info(f"Backed up lakehouse to {backup_path}")
+
+    backups = sorted(
+        [f for f in os.listdir(BACKUP_DIR) if f.startswith("lakehouse_")],
+        reverse=True,
+    )
+    for old_backup in backups[MAX_BACKUPS:]:
+        os.remove(os.path.join(BACKUP_DIR, old_backup))
+        context.log.info(f"Removed old backup: {old_backup}")

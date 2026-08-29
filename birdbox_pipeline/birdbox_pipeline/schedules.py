@@ -1,5 +1,5 @@
 from dagster import ScheduleDefinition, define_asset_job
-from .assets import birdbox_dbt_assets, evidence_build
+from .assets import birdbox_dbt_assets, evidence_build, update_readme, backup_lakehouse
 
 telemetry_job = define_asset_job(
     name="telemetry_job",
@@ -23,10 +23,20 @@ birdnet_schedule = ScheduleDefinition(
 
 dbt_job = define_asset_job(
     name="dbt_job",
-    selection=[birdbox_dbt_assets, evidence_build],
+    selection=[birdbox_dbt_assets, evidence_build, update_readme],
 )
 
 dbt_schedule = ScheduleDefinition(
     job=dbt_job,
     cron_schedule="*/15 * * * *",
+)
+
+backup_job = define_asset_job(
+    name="backup_job",
+    selection=["backup_lakehouse"],
+)
+
+backup_schedule = ScheduleDefinition(
+    job=backup_job,
+    cron_schedule="0 3 * * *",
 )
