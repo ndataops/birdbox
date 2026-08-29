@@ -1,0 +1,49 @@
+name: dbt build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  dbt-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dbt-project
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dbt-duckdb
+        run: pip install dbt-duckdb==1.9.0
+
+      - name: Create empty DuckDB target
+        run: mkdir -p ../data && touch ../data/lakehouse.duckdb
+
+      - name: Configure dbt profile
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << 'PROFILE'
+          birdbox:
+            target: ci
+            outputs:
+              ci:
+                type: duckdb
+                path: ../data/lakehouse.duckdb
+                threads: 4
+                extensions:
+                  - httpfs
+                  - sqlite
+          PROFILE
+
+      - name: dbt debug
+        run: dbt debug
+
+      - name: dbt seed
+        run: dbt seed
