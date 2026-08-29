@@ -23,8 +23,8 @@ jobs:
       - name: Install dbt-duckdb
         run: pip install dbt-duckdb==1.9.0
 
-      - name: Create empty DuckDB target
-        run: mkdir -p ../data && touch ../data/lakehouse.duckdb
+      - name: Create data directory
+        run: mkdir -p ../data
 
       - name: Configure dbt profile
         run: |
