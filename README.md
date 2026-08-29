@@ -1,6 +1,8 @@
 # Birdbox
 
 [![dbt build](https://github.com/ndataops/birdbox/actions/workflows/dbt.yml/badge.svg)](https://github.com/ndataops/birdbox/actions/workflows/dbt.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Last commit](https://img.shields.io/github/last-commit/ndataops/birdbox)
 
 A production-grade bioacoustic monitoring lakehouse running on a two-node home network — built to contribute real detections to eBird and BirdWeather, and to demonstrate end-to-end data engineering: ingestion, orchestration, transformation, and a live analytics dashboard, all running unattended.
 
