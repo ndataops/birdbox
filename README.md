@@ -6,6 +6,9 @@ A production-grade bioacoustic monitoring lakehouse running on a two-node home n
 
 **Live demo:** [birdbox.tail69334c.ts.net](https://birdbox.tail69334c.ts.net)
 **Repo:** [github.com/ndataops/birdbox](https://github.com/ndataops/birdbox)
+**Incident log:** [docs/incidents.md](./docs/incidents.md) - deeper write-ups of the bugs below
+
+![Birdbox dashboard](./docs/birdbox-dashboard.png)
 
 ![Birdbox architecture](./docs/birdbox-architecture.svg)
 
@@ -27,11 +30,11 @@ Everything — the sensor syncs, the dbt transforms, the dashboard rebuild, even
 <!-- STATS:START -->
 ## Live stats
 
-- **Detections:** 2,662
+- **Detections:** 2,681
 - **Species identified:** 76
-- **Latest detection:** 2026-08-29 09:54 UTC
-- **Telemetry readings:** 1,457
-- **Last updated:** 2026-08-29 19:55 UTC (auto-generated on every dbt run)
+- **Latest detection:** 2026-08-29 10:04 UTC
+- **Telemetry readings:** 1,461
+- **Last updated:** 2026-08-29 20:15 UTC (auto-generated on every dbt run)
 <!-- STATS:END -->
 
 ## Architecture
