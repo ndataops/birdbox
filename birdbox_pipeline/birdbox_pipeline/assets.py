@@ -1,8 +1,13 @@
-import subprocess
-import shutil
 import os
-from dagster import asset, AssetExecutionContext
+import subprocess
+
+from dagster import AssetExecutionContext, asset
 from dagster_dbt import DbtCliResource, dbt_assets
+
+
+class BirdboxAssetError(Exception):
+    """Raised when a Birdbox pipeline asset fails."""
+
 
 BIRDEDGE_HOST = "nelson@10.0.0.233"
 REMOTE_TELEMETRY_DB = "/home/nelson/telemetry/telemetry.db"
@@ -18,9 +23,10 @@ def bme280_reading(context: AssetExecutionContext) -> None:
         capture_output=True,
         text=True,
         timeout=30,
+        check=False,
     )
     if result.returncode != 0:
-        raise Exception(f"Sensor read failed: {result.stderr}")
+        raise BirdboxAssetError(f"Sensor read failed: {result.stderr}")
     context.log.info(result.stdout.strip())
 
 
@@ -32,9 +38,10 @@ def bronze_telemetry_sync(context: AssetExecutionContext) -> None:
         capture_output=True,
         text=True,
         timeout=30,
+        check=False,
     )
     if result.returncode != 0:
-        raise Exception(f"Bronze sync failed: {result.stderr}")
+        raise BirdboxAssetError(f"Bronze sync failed: {result.stderr}")
     context.log.info(f"Synced telemetry.db to {LOCAL_BRONZE_PATH}")
 
 
@@ -86,9 +93,10 @@ def evidence_build(context: AssetExecutionContext) -> None:
         capture_output=True,
         text=True,
         timeout=120,
+        check=False,
     )
     if sources.returncode != 0:
-        raise Exception(f"Evidence sources refresh failed: {sources.stderr}")
+        raise BirdboxAssetError(f"Evidence sources refresh failed: {sources.stderr}")
     context.log.info(sources.stdout.strip())
 
     build = subprocess.run(
@@ -97,9 +105,10 @@ def evidence_build(context: AssetExecutionContext) -> None:
         capture_output=True,
         text=True,
         timeout=180,
+        check=False,
     )
     if build.returncode != 0:
-        raise Exception(f"Evidence build failed: {build.stderr}")
+        raise BirdboxAssetError(f"Evidence build failed: {build.stderr}")
     context.log.info("Evidence static site rebuilt")
 
 
@@ -111,14 +120,15 @@ def update_readme(context: AssetExecutionContext) -> None:
         capture_output=True,
         text=True,
         timeout=60,
+        check=False,
     )
     if result.returncode != 0:
-        raise Exception(f"README update failed: {result.stderr}")
+        raise BirdboxAssetError(f"README update failed: {result.stderr}")
     context.log.info(result.stdout.strip())
 
 
 import shutil as shutil_module
-from datetime import datetime
+from datetime import datetime, timezone
 
 BACKUP_DIR = "/opt/birdbox/data/backups"
 LAKEHOUSE_PATH = "/opt/birdbox/data/lakehouse.duckdb"
@@ -128,7 +138,7 @@ MAX_BACKUPS = 7
 def backup_lakehouse(context: AssetExecutionContext) -> None:
     """Nightly backup of the DuckDB lakehouse file, keeping the last 7 days."""
     os.makedirs(BACKUP_DIR, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     backup_path = f"{BACKUP_DIR}/lakehouse_{timestamp}.duckdb"
 
     shutil_module.copy2(LAKEHOUSE_PATH, backup_path)

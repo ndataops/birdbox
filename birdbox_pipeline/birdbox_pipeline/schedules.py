@@ -1,5 +1,6 @@
 from dagster import ScheduleDefinition, define_asset_job
-from .assets import birdbox_dbt_assets, evidence_build, update_readme, backup_lakehouse
+
+from .assets import birdbox_dbt_assets, evidence_build, update_readme
 
 telemetry_job = define_asset_job(
     name="telemetry_job",

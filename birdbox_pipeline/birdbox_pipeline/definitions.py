@@ -1,11 +1,35 @@
-from dagster import Definitions, run_status_sensor, DagsterRunStatus, RunFailureSensorContext
-from dagster_dbt import DbtCliResource
+import json
 import os
 import urllib.request
-import json
 
-from .assets import bme280_reading, bronze_telemetry_sync, bronze_birdnet_sync, birdbox_dbt_assets, evidence_build, update_readme, backup_lakehouse, dbt_project_dir
-from .schedules import telemetry_job, telemetry_schedule, birdnet_job, birdnet_schedule, dbt_job, dbt_schedule, backup_job, backup_schedule
+from dagster import (
+    DagsterRunStatus,
+    Definitions,
+    RunFailureSensorContext,
+    run_status_sensor,
+)
+from dagster_dbt import DbtCliResource
+
+from .assets import (
+    backup_lakehouse,
+    birdbox_dbt_assets,
+    bme280_reading,
+    bronze_birdnet_sync,
+    bronze_telemetry_sync,
+    dbt_project_dir,
+    evidence_build,
+    update_readme,
+)
+from .schedules import (
+    backup_job,
+    backup_schedule,
+    birdnet_job,
+    birdnet_schedule,
+    dbt_job,
+    dbt_schedule,
+    telemetry_job,
+    telemetry_schedule,
+)
 
 
 @run_status_sensor(run_status=DagsterRunStatus.FAILURE)
