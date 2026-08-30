@@ -1,5 +1,6 @@
 {{ config(
     materialized='table',
+    contract={'enforced': true},
     post_hook="COPY {{ this }} TO '/opt/birdbox/data/gold/fct_bird_detections.parquet' (FORMAT PARQUET)"
 ) }}
 

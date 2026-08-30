@@ -3,20 +3,40 @@ version: 2
 models:
   - name: fct_bird_detections
     description: "Analytics-ready bird detections, confidence-tiered, excludes mic-testing dates."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: detection_id
+        data_type: bigint
         tests:
           - not_null
           - unique
+      - name: detected_at
+        data_type: timestamp
+      - name: common_name
+        data_type: varchar
+      - name: scientific_name
+        data_type: varchar
+      - name: confidence_score
+        data_type: double
+        tests:
+          - not_null
+      - name: latitude
+        data_type: double
+      - name: longitude
+        data_type: double
+      - name: audio_clip_name
+        data_type: varchar
+      - name: processing_time_ms
+        data_type: bigint
       - name: confidence_tier
+        data_type: varchar
         tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ['High', 'Medium', 'Low']
-      - name: confidence_score
-        tests:
-          - not_null
 
   - name: fct_detections_with_weather
     description: "Bird detections joined to the nearest BME280 reading within a 15-minute window."
