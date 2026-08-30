@@ -16,6 +16,14 @@ A production-grade bioacoustic monitoring lakehouse running on a two-node home n
 
 ![Birdbox architecture](./docs/birdbox-architecture.svg)
 
+## The physical build
+
+| Before | Wired | Deployed |
+|---|---|---|
+| ![Parts](./docs/birdbox-parts.jpg) | ![Internals](./docs/birdbox-internals.jpg) | ![Mounted](./docs/birdbox-mounted.jpg) |
+
+Raspberry Pi 4, condenser mic, IP54 weatherproof enclosure, mounted on a rooftop railing. Full build story, hardware decisions, and how it ties into the reliability work: [docs/build.md](./docs/build.md).
+
 ## What it does
 
 A Raspberry Pi in a weatherproof enclosure (`birdedge`) runs [BirdNET-Go](https://github.com/tphakala/birdnet-go) against a shotgun microphone to detect and identify bird species from live audio, alongside a BME280 sensor logging temperature, humidity, and pressure. A Lenovo ThinkCentre (`birdbox`) on the same network pulls that data on a schedule, transforms it through a bronze/silver/gold medallion architecture in DuckDB via dbt, and serves it through a live dashboard — the "Field Journal."
