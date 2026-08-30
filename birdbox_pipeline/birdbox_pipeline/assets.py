@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 
@@ -151,3 +152,35 @@ def backup_lakehouse(context: AssetExecutionContext) -> None:
     for old_backup in backups[MAX_BACKUPS:]:
         os.remove(os.path.join(BACKUP_DIR, old_backup))
         context.log.info(f"Removed old backup: {old_backup}")
+
+
+import csv
+import urllib.request
+
+EBIRD_TAXONOMY_PATH = "/opt/birdbox/data/bronze/ebird_taxonomy.csv"
+
+@asset
+def ebird_taxonomy_sync(context: AssetExecutionContext) -> None:
+    """Fetches eBird's full species taxonomy (scientific name -> common name) for use as the primary species name lookup."""
+    api_key = os.environ.get("EBIRD_API_KEY")
+    if not api_key:
+        raise BirdboxAssetError("EBIRD_API_KEY not set")
+
+    req = urllib.request.Request(
+        "https://api.ebird.org/v2/ref/taxonomy/ebird?fmt=json",
+        headers={"X-eBirdApiToken": api_key, "User-Agent": "Birdbox-Dagster-Sensor/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read())
+
+    os.makedirs(os.path.dirname(EBIRD_TAXONOMY_PATH), exist_ok=True)
+    with open(EBIRD_TAXONOMY_PATH, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["scientific_name", "common_name"])
+        for entry in data:
+            sci = entry.get("sciName", "").strip().lower()
+            com = entry.get("comName", "").strip()
+            if sci and com:
+                writer.writerow([sci, com])
+
+    context.log.info(f"Synced {len(data)} species from eBird taxonomy to {EBIRD_TAXONOMY_PATH}")

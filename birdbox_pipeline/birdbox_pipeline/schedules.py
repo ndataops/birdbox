@@ -41,3 +41,13 @@ backup_schedule = ScheduleDefinition(
     job=backup_job,
     cron_schedule="0 3 * * *",
 )
+
+ebird_job = define_asset_job(
+    name="ebird_job",
+    selection=["ebird_taxonomy_sync"],
+)
+
+ebird_schedule = ScheduleDefinition(
+    job=ebird_job,
+    cron_schedule="0 4 * * 0",
+)

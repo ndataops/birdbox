@@ -15,8 +15,9 @@ SELECT
     to_timestamp(d.detected_at) AS detected_at,
     l.scientific_name,
     COALESCE(
+        et.common_name,
         scn.common_name,
-        -- Fallback for species not yet in seeds/species_common_names.csv:
+        -- Final fallback for species in neither eBird's taxonomy nor the manual seed:
         -- title-cases the scientific name so it's still readable, not a real common name
         list_aggregate(list_transform(string_split(REPLACE(l.scientific_name, '_', ' '), ' '), part -> upper(part[1:1]) || lower(part[2:])), 'string_agg', ' ')
     ) AS common_name,
@@ -29,5 +30,7 @@ SELECT
 FROM raw_detections d
 LEFT JOIN raw_labels l
     ON d.label_id = l.id
+LEFT JOIN {{ ref('stg_ebird_taxonomy') }} et
+    ON LOWER(l.scientific_name) = et.scientific_name
 LEFT JOIN {{ ref('species_common_names') }} scn
     ON LOWER(l.scientific_name) = scn.scientific_name
