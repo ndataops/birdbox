@@ -59,3 +59,15 @@ dbt_executable
 **Fix:** Applied the same `${VAR}`-substitution pattern to the compose file, deleted the stale debug dump, and used the moment of writing the `.gitignore` for the first commit as a forcing function to review every file for embedded secrets before anything went public.
 
 **Lesson:** Fixing a credential leak in the place you noticed it doesn't mean you've found every place it lives. The same secret had propagated to a second config file and a stray log/dump file, neither of which were touched by the first fix. Worth treating "clean up this credential" as "find every place this credential appears," not a single edit.
+
+---
+
+## 5. A hand-maintained lookup table that kept needing hand-maintenance
+
+**Symptom:** Species names occasionally showed up in the dashboard as title-cased Latin binomials (e.g., "Astur Cooperii") instead of real common names (Cooper's Hawk) — readable, but clearly not intended.
+
+**Investigation:** The original design mapped scientific names to common names via a `CASE WHEN` block, later converted to a dbt seed CSV, covering ~80 commonly-seen local species. Every time BirdNET-Go detected something outside that list — a rarer visitor, a recently-reclassified genus (Cooper's Hawk moved from *Accipiter* to *Astur* in recent taxonomic updates) — it fell through to a title-case fallback of the scientific name. The seed worked, but it meant a recurring, low-grade maintenance burden: any new species required a manual PR to a static list.
+
+**Fix:** Replaced the seed as primary lookup with a scheduled asset pulling eBird's full public taxonomy (~17,900 species) via their API, refreshed weekly. The dbt join now checks eBird's taxonomy first, falls back to the original manual seed second, and the title-case fallback last — so even if eBird's API is ever unreachable, existing behavior degrades gracefully rather than breaking.
+
+**Lesson:** A hardcoded lookup table is often the fastest way to ship something, and also the first thing to revisit once the "sometimes wrong" cases start recurring. The real fix wasn't adding more rows — it was noticing the pattern (this keeps happening) and swapping the hand-maintained list for the actual upstream reference data source it was always trying to approximate.

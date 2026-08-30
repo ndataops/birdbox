@@ -101,7 +101,7 @@ cd ../birdbox_pipeline && dagster dev
 cd ../field-journal && npm install && npm run sources && npm run build && npm run preview
 ```
 
-Requires exported `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` for the MinIO-backed assets.
+Requires exported `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` for the MinIO-backed assets, and `EBIRD_API_KEY` for the taxonomy sync (free key at [ebird.org/api/keygen](https://ebird.org/api/keygen)).
 
 ## About
 
