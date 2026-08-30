@@ -7,14 +7,14 @@ SELECT
     count(*) AS total_detections,
     count(DISTINCT common_name) AS species_count,
     datediff('day', min(detected_at), max(detected_at)) AS days_running,
-    max(detected_at) AS last_detection
+    strftime(max(detected_at), '%b %-d, %-I:%M %p') AS last_detection
 FROM birdbox.fct_bird_detections
 ```
 
 <BigValue data={stats_summary} value=total_detections title="Total detections"/>
 <BigValue data={stats_summary} value=species_count title="Species identified"/>
 <BigValue data={stats_summary} value=days_running title="Days running" fmt="0"/>
-<BigValue data={stats_summary} value=last_detection title="Last detection" fmt="MMM D, h:mm a"/>
+<BigValue data={stats_summary} value=last_detection title="Last detection"/>
 
 ```date_bounds
 SELECT detected_at FROM birdbox.fct_bird_detections
