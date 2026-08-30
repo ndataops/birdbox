@@ -40,8 +40,12 @@ models:
 
   - name: fct_detections_with_weather
     description: "Bird detections joined to the nearest BME280 reading within a 15-minute window."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: detection_id
+        data_type: bigint
         tests:
           - not_null
           - unique
@@ -49,14 +53,45 @@ models:
               arguments:
                 to: ref('fct_bird_detections')
                 field: detection_id
+      - name: detected_at
+        data_type: timestamp
+      - name: common_name
+        data_type: varchar
+      - name: scientific_name
+        data_type: varchar
+      - name: confidence_score
+        data_type: double
+      - name: confidence_tier
+        data_type: varchar
+      - name: temperature_f
+        data_type: double
+      - name: humidity_pct
+        data_type: double
+      - name: pressure_hpa
+        data_type: double
 
   - name: fct_daily_alerts
     description: "High-confidence first-of-day species sightings, surfaced as New Arrivals."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: detection_id
+        data_type: bigint
         tests:
           - not_null
           - unique
+      - name: detected_at
+        data_type: timestamp
+      - name: scientific_name
+        data_type: varchar
+      - name: common_name
+        data_type: varchar
       - name: confidence_score
+        data_type: double
         tests:
           - not_null
+      - name: alert_type
+        data_type: varchar
+      - name: alert_message
+        data_type: varchar
