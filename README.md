@@ -4,7 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Last commit](https://img.shields.io/github/last-commit/ndataops/birdbox)
 
-A production-grade bioacoustic monitoring lakehouse running on a two-node home network — built to contribute real detections to eBird and BirdWeather, and to demonstrate end-to-end data engineering: ingestion, orchestration, transformation, and a live analytics dashboard, all running unattended.
+A production-grade bioacoustic monitoring lakehouse running on a two-node home network — built to demonstrate end-to-end data engineering (ingestion, orchestration, transformation, and a live analytics dashboard, all running unattended) with genuine species detection enriched via eBird's taxonomy API.
+
+**Note on citizen science integrations:** BirdNET-Go supports submitting detections to BirdWeather, but this requires uploading raw audio clips, and BirdWeather has no mechanism to submit detection metadata without the associated recording. After evaluating the privacy tradeoff, that integration is intentionally disabled here — this project prioritizes not capturing/sharing ambient audio over the citizen-science contribution. eBird's API is used read-only for species taxonomy lookups (no audio, no data leaves the device beyond the lookup query itself).
 
 **Live demo:** [birdbox.tail69334c.ts.net](https://birdbox.tail69334c.ts.net)
 **Repo:** [github.com/ndataops/birdbox](https://github.com/ndataops/birdbox)
