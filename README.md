@@ -70,10 +70,18 @@ This system had several real, previously-undiagnosed production bugs — not sta
 - **A pipeline that never existed.** Bird detection sync from birdedge to the lakehouse had no automation at all — a one-time manual copy from early setup, never turned into a scheduled asset. Built a proper `bronze_birdnet_sync` asset pulling from MinIO, matching the existing medallion pattern.
 - **Plaintext credentials in two places.** A MinIO secret was hardcoded in both `profiles.yml` and `docker-compose.yml`. Replaced with `env_var()`/`${VAR}` substitution backed by a single `chmod 600` secrets file — zero plaintext credentials anywhere in the codebase or git history.
 
-## Roadmap
+## Skills demonstrated
 
+- **Orchestration:** Dagster (asset-based scheduling, sensors, run-failure alerting)
+- **Transformation & data quality:** dbt (medallion architecture, 23 tests, enforced data contracts, freshness checks)
+- **CI/CD:** GitHub Actions (dbt build validation + linting on every push)
+- **Infrastructure reliability:** systemd service supervision, automated backups, reboot-tested on real hardware
+- **Observability:** Discord failure alerting, self-updating documentation
+- **Data engineering judgment:** root-caused three separate production incidents, made and documented a privacy-vs-feature tradeoff decision
+- **Full-stack delivery:** live public dashboard (Evidence.dev), interactive data catalog (dbt docs), physical IoT hardware
+
+## Roadmap
 - Port to Databricks as the primary showcase (in progress toward certification)
-- Data contracts and lineage on the gold layer
 - Natural-language query layer over the lakehouse
 - Reusable "lakehouse spine" for sibling projects (air quality, transit, pollinators)
 
@@ -94,3 +102,7 @@ cd ../field-journal && npm install && npm run sources && npm run build && npm ru
 ```
 
 Requires exported `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` for the MinIO-backed assets.
+
+## About
+
+Built by Nelson Schicke — [LinkedIn](https://www.linkedin.com/in/nelsonschicke)
