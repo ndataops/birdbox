@@ -45,8 +45,8 @@ Everything — the sensor syncs, the dbt transforms, the dashboard rebuild, even
 - **Detections:** 3,818
 - **Species identified:** 91
 - **Latest detection:** 2026-09-06 10:18 UTC
-- **Telemetry readings:** 3,768
-- **Last updated:** 2026-09-06 20:30 UTC (auto-generated on every dbt run)
+- **Telemetry readings:** 3,771
+- **Last updated:** 2026-09-06 20:45 UTC (auto-generated on every dbt run)
 <!-- STATS:END -->
 
 ## Architecture
