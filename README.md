@@ -42,11 +42,11 @@ Everything — the sensor syncs, the dbt transforms, the dashboard rebuild, even
 <!-- STATS:START -->
 ## Live stats
 
-- **Detections:** 8,450
+- **Detections:** 8,471
 - **Species identified:** 125
-- **Latest detection:** 2026-09-28 08:37 UTC
-- **Telemetry readings:** 10,010
-- **Last updated:** 2026-09-28 18:40 UTC (auto-generated on every dbt run)
+- **Latest detection:** 2026-09-28 08:56 UTC
+- **Telemetry readings:** 10,013
+- **Last updated:** 2026-09-28 18:55 UTC (auto-generated on every dbt run)
 <!-- STATS:END -->
 
 ## Architecture
