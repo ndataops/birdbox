@@ -1,6 +1,7 @@
 # Environments / virtualenvs
 venv/
 dagster_env/
+venv-dbx/
 node_modules/
 
 # Dagster runtime state
