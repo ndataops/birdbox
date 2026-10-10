@@ -83,5 +83,45 @@ confidence checksums. The only intended difference is the corrected weather join
 differs between engines. Port first with identical behavior, prove parity with checksums, and make behavior
 changes in a separate, documented commit.
 
+
+## 6. Tools match patterns anywhere in a tree, and empty results can break a pipeline
+
+**rsync `--exclude build`** matched every folder named `build` at any depth, including
+`node_modules/@google-cloud/bigquery/build/`, which broke Evidence's plugin loading in the scratch copy.
+Anchor patterns with a leading slash (`--exclude /build`) when you mean only the top level.
+`.gitignore` matches the same way.
+
+**Empty tables:** Evidence's Databricks connector writes a zero-byte file when a query returns no rows,
+and the static build then fails loading it. A table that can legitimately be empty (here, new-species
+alerts on a quiet day) needs a typed placeholder row in the source query, plus a filter on the pages
+(`WHERE detection_id > 0`).
+
+**Workflow:** build in a scratch copy, confirm the build succeeded, and only then serve it. A 404 from a
+preview server usually means the build folder is missing, not a network problem.
+
+
+## 7. Green checks don't prove a change works
+
+**README stats:** the auto-updating block labeled `detected_at` as UTC when gold stores Chicago time,
+and printed a "Last updated" time about 5 hours in the future, because it read the telemetry column
+that the timezone bug (lesson 1) had shifted. It sat on the public README unnoticed. Rebuilding the
+script against the corrected Databricks tables fixed both, and a `--dry-run` mode let the new output be
+compared with the old before anything was pushed.
+
+**Backups:** the new backup asset passed `py_compile` and `ruff` yet still had two flaws that only a real
+run exposed. A missing `import sqlite3` compiles fine (names resolve at runtime, so use
+`ruff check --select F821`). And SQLite databases in WAL mode produce `-wal` and `-shm` sidecar files,
+which tripled the file count per backup and would have cut the 7-day retention to about 2 days.
+A restore test (open the newest backup, compare its row count to the source) is the real check.
+
+**Reading terminals:** long lines wrap in the terminal and copying them drops the space at the wrap
+(`notf`, `theeBird`, `needsa`). Before "fixing" a typo seen in terminal output, check the file with
+`grep -c`.
+
+**Rules:**
+- Syntax checks prove syntax. Run the thing, then verify its output against the source.
+- Test retention and cleanup logic against the files the tool really produces.
+- Before editing a suspected typo, confirm with `grep`, not by eye.
+
 ## Takeaway
 Plausible-looking output isn't validation, experiments belong in a verified copy, and anything scheduled needs a matching cleanup.
