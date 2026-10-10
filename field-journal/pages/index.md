@@ -11,7 +11,7 @@ SELECT
 FROM birdbox.fct_bird_detections
 ```
 
-<BigValue data={stats_summary} value=total_detections title="Total detections"/>
+<BigValue data={stats_summary} value=total_detections title="Total detections" fmt="#,##0"/>
 <BigValue data={stats_summary} value=species_count title="Species identified"/>
 <BigValue data={stats_summary} value=days_running title="Days running" fmt="0"/>
 <BigValue data={stats_summary} value=last_detection title="Last detection"/>
@@ -32,6 +32,7 @@ SELECT detected_at FROM birdbox.fct_bird_detections
 ```fct_new_arrivals
 SELECT scientific_name, detected_at, confidence_score, alert_message
 FROM birdbox.fct_daily_alerts
+WHERE detection_id > 0
 ORDER BY detected_at DESC
 LIMIT 5
 ```
@@ -140,12 +141,14 @@ ORDER BY hour_of_day, d.common_name
     title="Top 10 Species by Hour of Day"
 />
 
-## Weather Conditions at Detection Time
+## Inside the Sensor Housing at Detection Time
+
+The BME280 sensor sits inside a sealed rooftop enclosure, so these are enclosure-internal readings, not outdoor weather.
 
 ```species_list
 SELECT DISTINCT common_name
 FROM birdbox.fct_detections_with_weather
-WHERE temperature_f IS NOT NULL
+WHERE enclosure_temp_f IS NOT NULL
 ORDER BY common_name
 ```
 
@@ -153,9 +156,9 @@ ORDER BY common_name
 </Dropdown>
 
 ```fct_weather_scatter
-SELECT temperature_f, humidity_pct, common_name, detected_at
+SELECT enclosure_temp_f, enclosure_humidity_pct, common_name, detected_at
 FROM birdbox.fct_detections_with_weather
-WHERE temperature_f IS NOT NULL
+WHERE enclosure_temp_f IS NOT NULL
   AND detected_at::DATE >= '${inputs.date_filter.start}'::DATE
   AND detected_at::DATE <= '${inputs.date_filter.end}'::DATE
   AND common_name IN ${inputs.species_filter.value}
@@ -163,11 +166,13 @@ WHERE temperature_f IS NOT NULL
 
 <ScatterPlot
     data={fct_weather_scatter}
-    x=temperature_f
-    y=humidity_pct
+    x=enclosure_temp_f
+    y=enclosure_humidity_pct
+    xAxisTitle="Enclosure temperature (°F)"
+    yAxisTitle="Enclosure humidity (%)"
     yFmt="0.0'%'"
     series=common_name
-    title="Temperature vs Humidity at Detection Time"
+    title="Enclosure Temperature vs Humidity at Detection Time"
 />
 
 ## 🎙️ Recent Visitors Log

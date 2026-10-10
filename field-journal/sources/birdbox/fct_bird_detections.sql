@@ -1,1 +1,1 @@
-SELECT * FROM fct_bird_detections
+SELECT * FROM birdbox.gold.fct_bird_detections

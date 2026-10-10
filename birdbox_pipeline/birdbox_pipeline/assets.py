@@ -86,7 +86,7 @@ def bronze_birdnet_sync(context: AssetExecutionContext) -> None:
 
 EVIDENCE_DIR = "/opt/birdbox/field-journal"
 
-@asset(deps=[birdbox_dbt_assets])
+@asset(deps=["databricks_refresh"])
 def evidence_build(context: AssetExecutionContext) -> None:
     """Rebuilds the Evidence static site from current DuckDB data, so the live demo stays fresh after every dbt run."""
     sources = subprocess.run(
@@ -134,7 +134,7 @@ def evidence_build(context: AssetExecutionContext) -> None:
 def update_readme(context: AssetExecutionContext) -> None:
     """Regenerates the auto-updating stats block in README.md and pushes to GitHub."""
     result = subprocess.run(
-        ["/opt/birdbox/venv/bin/python3", "/opt/birdbox/scripts/update_readme_stats.py"],
+        ["/opt/birdbox/venv-dbx/bin/python", "/opt/birdbox/scripts/update_readme_stats.py"],
         capture_output=True,
         text=True,
         timeout=60,

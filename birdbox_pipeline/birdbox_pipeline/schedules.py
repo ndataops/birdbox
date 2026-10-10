@@ -24,7 +24,7 @@ birdnet_schedule = ScheduleDefinition(
 
 dbt_job = define_asset_job(
     name="dbt_job",
-    selection=[birdbox_dbt_assets, evidence_build, update_readme],
+    selection=[birdbox_dbt_assets],
 )
 
 dbt_schedule = ScheduleDefinition(
@@ -52,14 +52,12 @@ ebird_schedule = ScheduleDefinition(
     cron_schedule="0 4 * * 0",
 )
 
-
-
 databricks_job = define_asset_job(
     name="databricks_job",
-    selection=["databricks_refresh"],
+    selection=["databricks_refresh", "evidence_build", "update_readme"],
 )
 
 databricks_schedule = ScheduleDefinition(
     job=databricks_job,
-    cron_schedule="7 */3 * * *",
+    cron_schedule="7 * * * *",
 )

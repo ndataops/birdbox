@@ -1,4 +1,6 @@
 name: birdbox
-type: duckdb
+type: databricks
 options:
-  filename: ../../../data/lakehouse.duckdb
+  host: dbc-5a058c14-7622.cloud.databricks.com
+  port: 443
+  path: /sql/1.0/warehouses/ec72e9e9841313a7
