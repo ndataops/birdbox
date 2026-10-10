@@ -39,7 +39,7 @@ backup_job = define_asset_job(
 
 backup_schedule = ScheduleDefinition(
     job=backup_job,
-    cron_schedule="0 3 * * *",
+    cron_schedule="2 3 * * *",
 )
 
 ebird_job = define_asset_job(

@@ -146,30 +146,76 @@ def update_readme(context: AssetExecutionContext) -> None:
 
 
 import shutil as shutil_module
+import sqlite3
 from datetime import datetime, timezone
 
 BACKUP_DIR = "/opt/birdbox/data/backups"
 LAKEHOUSE_PATH = "/opt/birdbox/data/lakehouse.duckdb"
 MAX_BACKUPS = 7
 
+SQLITE_BACKUPS = {
+    "birdnet": "/opt/birdbox/data/bronze/birdnet.db",
+    "telemetry": "/opt/birdbox/data/bronze/telemetry.db",
+}
+FILE_BACKUPS = {
+    "ebird_taxonomy": ("/opt/birdbox/data/bronze/ebird_taxonomy.csv", ".csv"),
+    "lakehouse": (LAKEHOUSE_PATH, ".duckdb"),  # legacy: kept until the DuckDB pipeline is retired
+}
+
+
+def _backup_sqlite(src: str, dst: str) -> None:
+    """Consistent copy via SQLite's backup API, verified before it counts as a backup.
+
+    The copy is switched to a rollback journal so it is one self-contained file
+    (the source runs in WAL mode, which would otherwise leave -wal/-shm sidecars).
+    """
+    try:
+        source = sqlite3.connect(f"file:{src}?mode=ro", uri=True)
+        try:
+            target = sqlite3.connect(dst)
+            try:
+                source.backup(target)
+                target.execute("PRAGMA journal_mode=DELETE")
+                result = target.execute("PRAGMA quick_check").fetchone()[0]
+            finally:
+                target.close()
+        finally:
+            source.close()
+        if result != "ok":
+            raise BirdboxAssetError(f"Integrity check failed for {dst}: {result}")
+    except (sqlite3.Error, BirdboxAssetError) as exc:
+        for leftover in (dst, f"{dst}-wal", f"{dst}-shm"):
+            if os.path.exists(leftover):
+                os.remove(leftover)
+        raise BirdboxAssetError(f"Backup of {src} failed: {exc}") from exc
+
 @asset
 def backup_lakehouse(context: AssetExecutionContext) -> None:
-    """Nightly backup of the DuckDB lakehouse file, keeping the last 7 days."""
+    """Nightly backup of the SQLite source snapshots (the real source of truth), the eBird taxonomy, and the legacy DuckDB file. Keeps the last 7 of each."""
     os.makedirs(BACKUP_DIR, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    backup_path = f"{BACKUP_DIR}/lakehouse_{timestamp}.duckdb"
 
-    shutil_module.copy2(LAKEHOUSE_PATH, backup_path)
-    context.log.info(f"Backed up lakehouse to {backup_path}")
+    for name, src in SQLITE_BACKUPS.items():
+        dst = f"{BACKUP_DIR}/{name}_{timestamp}.db"
+        _backup_sqlite(src, dst)
+        context.log.info(f"Backed up {name} to {dst} (integrity verified)")
 
-    backups = sorted(
-        [f for f in os.listdir(BACKUP_DIR) if f.startswith("lakehouse_")],
-        reverse=True,
-    )
-    for old_backup in backups[MAX_BACKUPS:]:
-        os.remove(os.path.join(BACKUP_DIR, old_backup))
-        context.log.info(f"Removed old backup: {old_backup}")
+    for name, (src, ext) in FILE_BACKUPS.items():
+        if not os.path.exists(src):
+            context.log.warning(f"Skipping {name}: {src} not found")
+            continue
+        dst = f"{BACKUP_DIR}/{name}_{timestamp}{ext}"
+        shutil_module.copy2(src, dst)
+        context.log.info(f"Backed up {name} to {dst}")
 
+    for prefix in [*SQLITE_BACKUPS, *FILE_BACKUPS]:
+        backups = sorted(
+            (f for f in os.listdir(BACKUP_DIR) if f.startswith(f"{prefix}_") and not f.endswith(("-wal", "-shm"))),
+            reverse=True,
+        )
+        for old_backup in backups[MAX_BACKUPS:]:
+            os.remove(os.path.join(BACKUP_DIR, old_backup))
+            context.log.info(f"Removed old backup: {old_backup}")
 
 import csv
 import urllib.request
