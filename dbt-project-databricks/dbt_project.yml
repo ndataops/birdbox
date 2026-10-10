@@ -1,0 +1,24 @@
+name: 'birdbox_lakehouse'
+version: '2.0.0'
+config-version: 2
+profile: 'birdbox'
+model-paths: ["models"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+vars:
+  telemetry_freshness_minutes: 180
+models:
+  birdbox_lakehouse:
+    bronze:
+      +materialized: view
+      +schema: bronze
+    silver:
+      +materialized: table
+      +schema: silver
+    gold:
+      +materialized: table
+      +schema: gold
+seeds:
+  birdbox_lakehouse:
+    +schema: bronze

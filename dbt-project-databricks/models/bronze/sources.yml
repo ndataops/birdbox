@@ -1,0 +1,11 @@
+version: 2
+sources:
+  - name: birdnet
+    database: birdbox
+    schema: bronze
+    description: "Parquet/CSV exports of birdbox's SQLite snapshots, loaded by export_to_databricks.py"
+    tables:
+      - name: detections
+      - name: labels
+      - name: raw_telemetry
+      - name: ebird_taxonomy

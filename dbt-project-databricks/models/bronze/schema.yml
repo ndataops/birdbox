@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: stg_birdnet_detections
+    description: "Raw BirdNET-Go detections joined to species labels. Timestamps are naive UTC."
+    columns:
+      - name: raw_id
+        description: "Primary key from BirdNET-Go's SQLite detections table."
+        tests: [not_null, unique]
+      - name: detected_at_utc
+        tests: [not_null]
+      - name: common_name
+        tests: [not_null]
+
+  - name: stg_telemetry
+    description: "BME280 readings from inside the sensor enclosure (not ambient weather). Timestamps are naive UTC."
+    columns:
+      - name: recorded_at_utc
+        tests: [not_null]
+      - name: enclosure_temp_f
+        tests: [not_null]

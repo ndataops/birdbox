@@ -1,0 +1,97 @@
+version: 2
+
+models:
+  - name: fct_bird_detections
+    description: "Analytics-ready bird detections, confidence-tiered, excludes mic-testing dates. detected_at is naive America/Chicago local time."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: detection_id
+        data_type: bigint
+        tests:
+          - not_null
+          - unique
+      - name: detected_at
+        data_type: timestamp_ntz
+      - name: common_name
+        data_type: string
+      - name: scientific_name
+        data_type: string
+      - name: confidence_score
+        data_type: double
+        tests:
+          - not_null
+      - name: latitude
+        data_type: double
+      - name: longitude
+        data_type: double
+      - name: audio_clip_name
+        data_type: string
+      - name: processing_time_ms
+        data_type: bigint
+      - name: confidence_tier
+        data_type: string
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['High', 'Medium', 'Low']
+
+  - name: fct_detections_with_weather
+    description: "Bird detections joined to the nearest enclosure-sensor reading within 15 minutes (matched in UTC). Sensor values are enclosure-internal, not ambient."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: detection_id
+        data_type: bigint
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('fct_bird_detections')
+                field: detection_id
+      - name: detected_at
+        data_type: timestamp_ntz
+      - name: common_name
+        data_type: string
+      - name: scientific_name
+        data_type: string
+      - name: confidence_score
+        data_type: double
+      - name: confidence_tier
+        data_type: string
+      - name: enclosure_temp_f
+        data_type: double
+      - name: enclosure_humidity_pct
+        data_type: double
+      - name: pressure_hpa
+        data_type: double
+
+  - name: fct_daily_alerts
+    description: "High-confidence first-sighting species in the last 24 hours (Chicago local time), surfaced as New Arrivals."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: detection_id
+        data_type: bigint
+        tests:
+          - not_null
+          - unique
+      - name: detected_at
+        data_type: timestamp_ntz
+      - name: scientific_name
+        data_type: string
+      - name: common_name
+        data_type: string
+      - name: confidence_score
+        data_type: double
+        tests:
+          - not_null
+      - name: alert_type
+        data_type: string
+      - name: alert_message
+        data_type: string
