@@ -201,3 +201,23 @@ def ebird_taxonomy_sync(context: AssetExecutionContext) -> None:
                 writer.writerow([sci, com])
 
     context.log.info(f"Synced {len(data)} species from eBird taxonomy to {EBIRD_TAXONOMY_PATH}")
+
+
+
+DATABRICKS_REFRESH_SCRIPT = "/opt/birdbox/scripts/refresh_databricks.sh"
+
+
+@asset
+def databricks_refresh(context: AssetExecutionContext) -> None:
+    """Exports SQLite snapshots to a Unity Catalog volume, reloads bronze Delta tables, and runs dbt build on Databricks."""
+    result = subprocess.run(
+        ["/bin/bash", DATABRICKS_REFRESH_SCRIPT],
+        capture_output=True,
+        text=True,
+        timeout=900,
+        check=False,
+    )
+    tail = (result.stdout + result.stderr)[-1500:]
+    if result.returncode != 0:
+        raise BirdboxAssetError(f"Databricks refresh failed:\n{tail}")
+    context.log.info(tail)

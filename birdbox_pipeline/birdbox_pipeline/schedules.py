@@ -51,3 +51,15 @@ ebird_schedule = ScheduleDefinition(
     job=ebird_job,
     cron_schedule="0 4 * * 0",
 )
+
+
+
+databricks_job = define_asset_job(
+    name="databricks_job",
+    selection=["databricks_refresh"],
+)
+
+databricks_schedule = ScheduleDefinition(
+    job=databricks_job,
+    cron_schedule="7 */3 * * *",
+)

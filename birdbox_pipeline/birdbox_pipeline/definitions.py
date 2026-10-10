@@ -20,6 +20,7 @@ from .assets import (
     ebird_taxonomy_sync,
     evidence_build,
     update_readme,
+    databricks_refresh,
 )
 from .schedules import (
     backup_job,
@@ -32,6 +33,8 @@ from .schedules import (
     ebird_schedule,
     telemetry_job,
     telemetry_schedule,
+    databricks_job,
+    databricks_schedule,
 )
 
 
@@ -55,9 +58,9 @@ def discord_failure_alert(context: RunFailureSensorContext):
 
 
 defs = Definitions(
-    assets=[birdbox_dbt_assets, bme280_reading, bronze_telemetry_sync, bronze_birdnet_sync, evidence_build, update_readme, backup_lakehouse, ebird_taxonomy_sync],
-    jobs=[telemetry_job, birdnet_job, dbt_job, backup_job, ebird_job],
-    schedules=[telemetry_schedule, birdnet_schedule, dbt_schedule, backup_schedule, ebird_schedule],
+    assets=[birdbox_dbt_assets, bme280_reading, bronze_telemetry_sync, bronze_birdnet_sync, evidence_build, update_readme, backup_lakehouse, ebird_taxonomy_sync, databricks_refresh],
+    jobs=[telemetry_job, birdnet_job, dbt_job, backup_job, ebird_job, databricks_job],
+    schedules=[telemetry_schedule, birdnet_schedule, dbt_schedule, backup_schedule, ebird_schedule, databricks_schedule],
     sensors=[discord_failure_alert],
     resources={
         "dbt": DbtCliResource(project_dir=dbt_project_dir, dbt_executable="/opt/birdbox/dagster_env/bin/dbt"),
