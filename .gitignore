@@ -45,3 +45,4 @@ __pycache__/
 
 # Dagster telemetry
 birdbox_pipeline/.telemetry/
+field-journal-dbx/
