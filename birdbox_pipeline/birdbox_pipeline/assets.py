@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 
 from dagster import AssetExecutionContext, asset
@@ -100,6 +101,12 @@ def evidence_build(context: AssetExecutionContext) -> None:
         raise BirdboxAssetError(f"Evidence sources refresh failed: {sources.stderr}")
     context.log.info(sources.stdout.strip())
 
+    build_dir = os.path.join(EVIDENCE_DIR, "build")
+    site_dir = os.path.join(EVIDENCE_DIR, "site")
+
+    # Evidence merges into build/ and never prunes its hash-named files, so start clean every run.
+    shutil.rmtree(build_dir, ignore_errors=True)
+
     build = subprocess.run(
         ["npm", "run", "build"],
         cwd=EVIDENCE_DIR,
@@ -109,8 +116,18 @@ def evidence_build(context: AssetExecutionContext) -> None:
         check=False,
     )
     if build.returncode != 0:
-        raise BirdboxAssetError(f"Evidence build failed: {build.stderr}")
-    context.log.info("Evidence static site rebuilt")
+        raise BirdboxAssetError(f"Evidence build failed: {build.stderr}")  # site/ untouched: last good dashboard keeps serving
+
+    sync = subprocess.run(
+        ["rsync", "-a", "--delete", build_dir + "/", site_dir + "/"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    if sync.returncode != 0:
+        raise BirdboxAssetError(f"Evidence publish (rsync to site/) failed: {sync.stderr}")
+    context.log.info("Evidence static site rebuilt and published")
 
 
 @asset(deps=[evidence_build])

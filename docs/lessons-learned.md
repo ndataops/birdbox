@@ -24,11 +24,6 @@ BME280 sits in a sealed rooftop enclosure beside a Raspberry Pi (solar gain plus
 enclosure-internal temperature and humidity. The dashboard framing is updated to match.
 Pressure is barely affected by the enclosure and is unchanged.
 
-## Takeaway
-Plausible-looking output isn't validation. Check joins against raw data at the real-world
-timestamp, and check what a sensor physically measures before naming it.
-
-
 ## 3. Experiment files landed in the live project (a failed `cd` that didn't stop the script)
 
 **What happened:** a command block started with `cd` into a directory that didn't exist yet
@@ -49,3 +44,25 @@ was lost.
 
 **Side finding:** `dbt-project/target/` had grown to ~8.3 GB of per-run folders, the same
 accumulation pattern as the Evidence `build/` leak. It needs periodic cleanup.
+
+
+## 4. Anything that writes files on a schedule needs a matching cleanup
+
+**Pattern:** three separate leaks, all the same shape: a scheduled job writes new hash-named
+output on every run and nothing ever deletes the old output.
+- Evidence `build/` grew to 47 GB and filled the disk (dashboard stale for a week, Oct 2026).
+- dbt `target/birdbox_dbt_assets-<hash>` folders reached 8.3 GB (~3,500 folders).
+- Evidence `build/` was back to 12 GB four days after the manual cleanup.
+
+**Fix for dbt:** a nightly cron job that deletes run folders older than 24 hours. The age margin
+means it can never touch an in-flight run, and `manifest.json` (which Dagster reads) is left alone.
+
+**Fix for Evidence:** a build/site split. Scratch `build/` is wiped on every run, and `site/` (what the
+web server serves) is only updated via `rsync --delete` after a successful build. A failed build
+leaves the last good dashboard serving, and disk use stays flat (~120 MB each instead of growing ~3 GB/day).
+
+**Rule:** when you add a scheduled job, add its cleanup in the same change, and add a
+disk-usage alert so a leak shows up as a warning instead of an outage.
+
+## Takeaway
+Plausible-looking output isn't validation, experiments belong in a verified copy, and anything scheduled needs a matching cleanup.
