@@ -64,5 +64,24 @@ leaves the last good dashboard serving, and disk use stays flat (~120 MB each in
 **Rule:** when you add a scheduled job, add its cleanup in the same change, and add a
 disk-usage alert so a leak shows up as a warning instead of an outage.
 
+
+## 5. A WHERE clause silently bound to the source column, not the same-named alias
+
+**What happened:** `fct_bird_detections` selected `detected_at AT TIME ZONE 'America/Chicago' AS detected_at`,
+then filtered `WHERE detected_at::DATE NOT IN ('2026-08-16', '2026-08-17')`. In DuckDB the `WHERE` resolved to
+the *source* UTC column, so the filter excluded UTC dates while its comment described Chicago dates. Seven
+evening detections from 8/17 (local time) were kept that the comment suggests should have been excluded.
+
+**How it was found:** a row-count and checksum parity check of the Databricks port against the DuckDB
+gold tables (11,038 vs 11,045 rows), then tracing the 7-row difference back to the date filter.
+
+**Resolution:** the port deliberately reproduces the legacy behavior (filtering on UTC date), and a comment in
+the model says so. With that change the Databricks gold matches DuckDB exactly: 11,045 rows, identical id and
+confidence checksums. The only intended difference is the corrected weather join.
+
+**Rule:** don't reuse a source column name as an alias in the same SELECT, because alias resolution in WHERE
+differs between engines. Port first with identical behavior, prove parity with checksums, and make behavior
+changes in a separate, documented commit.
+
 ## Takeaway
 Plausible-looking output isn't validation, experiments belong in a verified copy, and anything scheduled needs a matching cleanup.
