@@ -124,4 +124,9 @@ A restore test (open the newest backup, compare its row count to the source) is 
 - Before editing a suspected typo, confirm with `grep`, not by eye.
 
 ## Takeaway
-Plausible-looking output isn't validation, experiments belong in a verified copy, and anything scheduled needs a matching cleanup.
+
+- **Plausible output isn't validation.** Check joins against raw data at the real timestamp, and check what a sensor physically measures before naming it (lessons 1, 2).
+- **Experiment in a verified copy, and prove parity before changing behavior.** Chain dependent commands with `&&`, commit first, and port with identical behavior before making deliberate changes (lessons 3, 5).
+- **Anything scheduled needs a matching cleanup.** Every job that writes files on a schedule needs its cleanup in the same change, plus a disk alert (lesson 4).
+- **Patterns match more than you mean.** Anchor excludes, and give tables that can be empty a typed placeholder (lesson 6).
+- **Green checks prove syntax, not behavior.** Run the thing, then verify its output against the source, for example with a restore test (lesson 7).
