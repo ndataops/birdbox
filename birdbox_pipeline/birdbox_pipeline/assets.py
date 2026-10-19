@@ -149,7 +149,7 @@ def update_readme(context: AssetExecutionContext) -> None:
         try:
             urllib.request.urlopen(hc_url, timeout=10)
             context.log.info("Healthcheck ping sent")
-        except Exception as exc:
+        except OSError as exc:
             context.log.warning(f"Healthcheck ping failed: {exc}")
 
 
