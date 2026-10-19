@@ -151,6 +151,7 @@ flowed through once birdbox was back.
   warehouse from the UI a few minutes later succeeded. Diagnosis: transient serverless
   capacity on Databricks' side. Free Edition makes no capacity guarantees.
 - After a manual `databricks_job` run, the dashboard was current again (12,632 detections).
+**Verified end to end (Oct 19):** after a deliberate reboot, all services came back on their own, the next scheduled `databricks_job` succeeded with no intervention, and its Healthchecks.io ping turned the check green.
 
 ### What changed
 | Gap | Fix |
