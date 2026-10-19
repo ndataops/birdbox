@@ -123,6 +123,66 @@ A restore test (open the newest backup, compare its row count to the source) is 
 - Test retention and cleanup logic against the files the tool really produces.
 - Before editing a suspected typo, confirm with `grep`, not by eye.
 
+## Oct 2026: Power loss → 8 silent days offline (+ Databricks capacity error on recovery)
+
+**Impact:** birdbox (ThinkCentre M720q) was powered off from Sun Oct 11, 8:08 AM CDT,
+until Mon Oct 19, ~9:49 AM CDT. No hourly Databricks refresh, README stats commits,
+or backups ran for 8 days, and the public dashboard was frozen at Oct 11.
+**No data was lost:** birdedge (Pi) kept detecting and buffering, and the backlog
+flowed through once birdbox was back.
+
+### What happened
+- The journal for the previous boot ends mid-stream at 13:08 UTC Oct 11, during the
+  `databricks_refresh` step of a scheduled run, with no shutdown sequence. That
+  pattern indicates power was cut, not a crash or clean shutdown.
+- The M720q's BIOS default for **After Power Loss** is to stay off, so the box never
+  came back on its own.
+- Nothing alerted. The Discord failure sensor runs *on birdbox*, so when birdbox is
+  off, there are no failures to report. The outage was found by noticing the
+  dashboard was down. Tailscale showed birdbox "last seen 8d ago."
+
+### Recovery
+- Powered on; all systemd services and Dagster schedules resumed with no intervention.
+- The run interrupted by the power cut was stuck in "Started" (193h). A normal
+  terminate hangs waiting on a process that no longer exists; force termination clears it.
+- The first two `databricks_refresh` runs failed with
+  `BAD_REQUEST: Cannot create the resource, please try again later` when opening a
+  session. `databricks warehouses start` from the CLI failed the same way. Starting the
+  warehouse from the UI a few minutes later succeeded. Diagnosis: transient serverless
+  capacity on Databricks' side. Free Edition makes no capacity guarantees.
+- After a manual `databricks_job` run, the dashboard was current again (12,632 detections).
+
+### What changed
+| Gap | Fix |
+|---|---|
+| Box stays off after a power blip | BIOS: Power → After Power Loss → **Power On**. Verified with a reboot: all services active within a minute. |
+| Transient Databricks errors cost a full hour | `RetryPolicy(max_retries=3, delay=60, backoff=EXPONENTIAL)` on `databricks_refresh` (retries at 1, 2, and 4 min) |
+| No alert when the box itself goes down | **Dead-man's switch:** the end of `update_readme` (the last step of `databricks_job`) pings Healthchecks.io. Period 1h, grace 1h; alerts go to Discord and email. Silence now alerts within ~2h. The ping URL lives in `/etc/birdbox-secrets.env`, and a failed ping only logs a warning. |
+
+### Also checked: birdedge disk
+- The Pi was at 83% of 29G, with 17G in BirdNET-Go audio clips. BirdNET-Go's retention is
+  `policy: usage, maxusage: 80%`, so it prunes clips itself and holds steady around 80%.
+- The systemd journal (1.2G) was **not** managed. It's now capped at 200M through
+  `/etc/systemd/journald.conf.d/size.conf`.
+
+### Lessons
+- **Alerting can't live only on the thing it monitors.** In-process failure alerts
+  catch broken jobs, not a dead host. An external heartbeat catches both.
+- **Read the end of the previous boot's journal first** (`journalctl -b -1 -e`). A log
+  that stops mid-stream points to power loss, and that one check settled the root cause.
+- **Check firmware defaults on always-on hardware.** Mini PCs ship configured as desktops.
+- **Free-tier cloud compute is best-effort.** Design for retries, and know where you
+  can see the platform's own error (the warehouse UI was clearer than the connector).
+- Small gotchas: `ssh birdbox` points at the LAN IP, so it fails off-network.
+  `journalctl --vacuum-*` only removes *archived* files. Pasting into VS Code can
+  double-indent the first line, so always run `py_compile` after an edit.
+
+### Follow-ups
+- [ ] Investigate intermittent `telemetry_job` failures (Oct 19, 9:50 and 10:45 AM);
+      consider the same retry policy if they're transient
+- [ ] Cap the journal on birdbox too
+- [ ] Decide on a fallback if Databricks Free Edition is unavailable for an extended period
+
 ## Takeaway
 
 - **Plausible output isn't validation.** Check joins against raw data at the real timestamp, and check what a sensor physically measures before naming it (lessons 1, 2).
@@ -130,3 +190,4 @@ A restore test (open the newest backup, compare its row count to the source) is 
 - **Anything scheduled needs a matching cleanup.** Every job that writes files on a schedule needs its cleanup in the same change, plus a disk alert (lesson 4).
 - **Patterns match more than you mean.** Anchor excludes, and give tables that can be empty a typed placeholder (lesson 6).
 - **Green checks prove syntax, not behavior.** Run the thing, then verify its output against the source, for example with a restore test (lesson 7).
+- **Monitoring can't live only inside what it monitors.** In-process alerts catch failing jobs, not a dead host; an external heartbeat catches both. Pair it with self-healing defaults: firmware that powers back on, and retries for transient cloud errors (lesson 8).
