@@ -1,19 +1,27 @@
-name: dbt build
+name: CI
 
 on:
   push:
     branches: [master]
     paths-ignore:
       - 'README.md'
+      - 'docs/**'
   pull_request:
     branches: [master]
 
 jobs:
-  dbt-build:
+  dbt-parse:
+    name: dbt parse (Databricks project)
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: dbt-project
+        working-directory: dbt-project-databricks
+    env:
+      # Placeholders: dbt parse validates the project without connecting to a warehouse
+      DBT_PROFILES_DIR: .
+      DATABRICKS_HOST: ci-placeholder.cloud.databricks.com
+      DATABRICKS_HTTP_PATH: /sql/1.0/warehouses/ci-placeholder
+      DATABRICKS_TOKEN: ci-placeholder
     steps:
       - uses: actions/checkout@v4
 
@@ -22,35 +30,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dbt-duckdb
-        run: pip install dbt-duckdb==1.9.0
+      - name: Install dbt (pinned to production versions)
+        run: pip install "dbt-core==1.12.5" "dbt-databricks==1.12.6"
 
-      - name: Create data directory
-        run: mkdir -p ../data
-
-      - name: Configure dbt profile
-        run: |
-          mkdir -p ~/.dbt
-          cat > ~/.dbt/profiles.yml << 'PROFILE'
-          birdbox:
-            target: ci
-            outputs:
-              ci:
-                type: duckdb
-                path: ../data/lakehouse.duckdb
-                threads: 4
-                extensions:
-                  - httpfs
-                  - sqlite
-          PROFILE
-
-      - name: dbt debug
-        run: dbt debug
-
-      - name: dbt seed
-        run: dbt seed
+      - name: dbt parse
+        run: dbt parse
 
   lint:
+    name: ruff (Dagster pipeline)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
