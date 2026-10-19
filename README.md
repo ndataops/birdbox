@@ -116,7 +116,7 @@ Real production bugs, not staged for the portfolio, found while running and hard
 
 - **Orchestration:** Dagster (asset-based scheduling, sensors, run-failure alerting)
 - **Transformation & data quality:** dbt (medallion architecture, 23 tests, enforced data contracts, freshness checks)
-- **CI/CD:** GitHub Actions (dbt build validation + linting on every push)
+- **CI/CD:** GitHub Actions on every PR: `dbt parse` of the Databricks project (models, refs, tests, YAML) and ruff linting of the Dagster pipeline
 - **Infrastructure reliability:** systemd service supervision, automated backups, reboot-tested on real hardware
 - **Observability:** Discord failure alerting, self-updating documentation, Healthchecks.io heartbeat
 - **Data engineering judgment:** root-caused multiple production incidents, made and documented a privacy-vs-feature tradeoff decision
