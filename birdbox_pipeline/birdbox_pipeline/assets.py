@@ -143,6 +143,14 @@ def update_readme(context: AssetExecutionContext) -> None:
     if result.returncode != 0:
         raise BirdboxAssetError(f"README update failed: {result.stderr}")
     context.log.info(result.stdout.strip())
+    hc_url = os.environ.get("HEALTHCHECK_URL")
+    if hc_url:
+        import urllib.request
+        try:
+            urllib.request.urlopen(hc_url, timeout=10)
+            context.log.info("Healthcheck ping sent")
+        except Exception as exc:
+            context.log.warning(f"Healthcheck ping failed: {exc}")
 
 
 import shutil as shutil_module
