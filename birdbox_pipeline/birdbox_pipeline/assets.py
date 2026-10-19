@@ -3,7 +3,7 @@ import os
 import shutil
 import subprocess
 
-from dagster import AssetExecutionContext, asset
+from dagster import AssetExecutionContext, Backoff, RetryPolicy, asset
 from dagster_dbt import DbtCliResource, dbt_assets
 
 
@@ -253,7 +253,7 @@ def ebird_taxonomy_sync(context: AssetExecutionContext) -> None:
 DATABRICKS_REFRESH_SCRIPT = "/opt/birdbox/scripts/refresh_databricks.sh"
 
 
-@asset
+@asset(retry_policy=RetryPolicy(max_retries=3, delay=60, backoff=Backoff.EXPONENTIAL))
 def databricks_refresh(context: AssetExecutionContext) -> None:
     """Exports SQLite snapshots to a Unity Catalog volume, reloads bronze Delta tables, and runs dbt build on Databricks."""
     result = subprocess.run(
