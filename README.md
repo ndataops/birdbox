@@ -48,8 +48,8 @@ Everything (the sensor syncs, the Databricks refresh, the dashboard rebuild, eve
 - **Detections:** 13,088
 - **Species identified:** 141
 - **Latest detection:** 2026-10-22 00:29 CT
-- **Telemetry readings:** 12,696
-- **Last updated:** 2026-10-22 07:05 UTC (auto-generated hourly from Databricks)
+- **Telemetry readings:** 12,708
+- **Last updated:** 2026-10-22 08:05 UTC (auto-generated hourly from Databricks)
 <!-- STATS:END -->
 
 ### Architecture
