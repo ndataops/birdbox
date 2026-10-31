@@ -123,8 +123,7 @@ A restore test (open the newest backup, compare its row count to the source) is 
 - Test retention and cleanup logic against the files the tool really produces.
 - Before editing a suspected typo, confirm with `grep`, not by eye.
 
-## Oct 2026: Power loss → 8 silent days offline (+ Databricks capacity error on recovery)
-
+## 8. Power loss → 8 silent days offline (+ Databricks capacity error on recovery)
 **Impact:** birdbox (ThinkCentre M720q) was powered off from Sun Oct 11, 8:08 AM CDT,
 until Mon Oct 19, ~9:49 AM CDT. No hourly Databricks refresh, README stats commits,
 or backups ran for 8 days, and the public dashboard was frozen at Oct 11.
@@ -177,12 +176,58 @@ flowed through once birdbox was back.
 - Small gotchas: `ssh birdbox` points at the LAN IP, so it fails off-network.
   `journalctl --vacuum-*` only removes *archived* files. Pasting into VS Code can
   double-indent the first line, so always run `py_compile` after an edit.
+  - **A failing check nobody sees isn't monitoring.** After the Databricks cutover, master's
+  lint was red for about a week; it only surfaced when PR #1 ran CI. GitHub failed-workflow
+  email notifications are now on, and the Actions tab is part of the weekly review.
 
 ### Follow-ups
-- [ ] Investigate intermittent `telemetry_job` failures (Oct 19, 9:50 and 10:45 AM);
-      consider the same retry policy if they're transient
-- [ ] Cap the journal on birdbox too
+- [X] Investigate intermittent `telemetry_job` failures (Oct 19, 9:50 and 10:45 AM);
+      consider the same retry policy if they're transient. (likely the same Wi-Fi uplink problem, see lesson 10)
+- [X] Cap the journal on birdbox too
 - [ ] Decide on a fallback if Databricks Free Edition is unavailable for an extended period
+
+## 9. A retry budget has to outlast the outage it's meant to ride out
+
+**What happened (Oct 30):** the Databricks Serverless warehouse stopped around midday and
+`databricks_refresh` failed with the same `BAD_REQUEST: Cannot create the resource` seen on
+Oct 19. The retry policy added after that incident (retries at 1, 2 and 4 min) was spent in
+about 7 minutes, but the warehouse stayed down for roughly four hours, until it was started by
+hand in the UI. The cause is unconfirmed (Free Edition quota or capacity, or a failed
+auto-start).
+
+**What worked:** the Healthchecks.io dead-man's switch from lesson 8 fired and caught it. No
+data was lost. `MAX(detected_at)` in gold was current, and the hourly detection counts had no
+hole, because the Pi and the bucket sync kept running.
+
+**Rules:**
+- Retries cover blips that clear in seconds to minutes. For an outage of hours, rely on the
+  next scheduled run plus an alert.
+- Add a cheap warm-up (`SELECT 1` with a longer timeout) so a cold start fails fast and visibly.
+- Alert on freshness of the output table, not only on job success.
+- Next time, check the Free Edition usage page before pressing Start, to tell quota from capacity.
+
+## 10. Reachability isn't throughput: a weak link needs store-and-forward
+
+**What happened:** `telemetry_job` failed every run from 7 PM Oct 30 into the next morning.
+The `scp` in `bronze_telemetry_sync` hit its 30 s timeout each time. Ping had 0% loss, a
+1500-byte don't-fragment ping passed, SSH worked, the Pi had 20 days of uptime, and reading the
+file locally took 9 ms. Only sustained Pi-to-hub transfers stalled (~140-240 KB/s, sometimes
+zero), while hub-to-Pi and hub-to-internet transfers were fast. The Pi is on Wi-Fi with no
+Ethernet option on the roof. Pausing `rclone` helped only modestly.
+
+**Fix:** the Pi now snapshots `telemetry.db` every 5 min with SQLite's backup API and uploads it
+to the bucket (`rclone` retries on its own). The hub pulls from the bucket, downloads to a temp
+file, runs `PRAGMA quick_check`, swaps it in with `os.replace()`, fails if the copy is over
+15 min old, and retries with backoff. Verified: 12 readings per hour for 24 h with no gaps,
+and the Dagster run is green.
+
+**Rules:**
+- Ping and small commands passing says nothing about bulk throughput. Test a real transfer in
+  each direction.
+- Rule out one layer at a time (ping, MTU, SSH, disk read, each direction, internet) instead of
+  guessing.
+- Don't
+
 
 ## Takeaway
 
@@ -192,3 +237,5 @@ flowed through once birdbox was back.
 - **Patterns match more than you mean.** Anchor excludes, and give tables that can be empty a typed placeholder (lesson 6).
 - **Green checks prove syntax, not behavior.** Run the thing, then verify its output against the source, for example with a restore test (lesson 7).
 - **Monitoring can't live only inside what it monitors.** In-process alerts catch failing jobs, not a dead host; an external heartbeat catches both. Pair it with self-healing defaults: firmware that powers back on, and retries for transient cloud errors (lesson 8).
+- **A retry budget must outlast the outage.** Retries cover blips, not hours-long capacity failures; pair them with a warm-up step and a freshness alert (lesson 9).
+- **Reachable isn't fast.** Ping and small commands can pass while bulk transfers stall; test real throughput, and move weak links off the critical path with store-and-forward (lesson 10).

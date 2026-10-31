@@ -71,3 +71,51 @@ dbt_executable
 **Fix:** Replaced the seed as primary lookup with a scheduled asset pulling eBird's full public taxonomy (~17,900 species) via their API, refreshed weekly. The dbt join now checks eBird's taxonomy first, falls back to the original manual seed second, and the title-case fallback last — so even if eBird's API is ever unreachable, existing behavior degrades gracefully rather than breaking.
 
 **Lesson:** A hardcoded lookup table is often the fastest way to ship something, and also the first thing to revisit once the "sometimes wrong" cases start recurring. The real fix wasn't adding more rows — it was noticing the pattern (this keeps happening) and swapping the hand-maintained list for the actual upstream reference data source it was always trying to approximate.
+
+
+---
+
+## 6. Databricks warehouse stopped and refused to restart (managed compute provisioning)
+
+**Symptom:** A healthchecks.io alert reported Birdbox down. Dagster's `databricks_refresh` asset had exhausted its retries.
+
+**Investigation:** The Dagster traceback ended in `databricks.sql.exc.RequestError: BAD_REQUEST: Cannot create the resource, please try again later`, raised from the connector's `OpenSession` call. That means the connector reached Databricks, but the platform would not provision or attach compute. The warehouse's Monitoring page showed regular query bursts from the refresh job until about midday, then nothing for roughly four hours. The Serverless Starter Warehouse had stopped, and starting it manually brought it back.
+
+**Root cause:** Not confirmed. The likely candidates are a Free Edition compute quota or capacity limit, or an implicit auto-start that failed. The error alone does not distinguish them.
+
+**Fix:** Started the warehouse manually, then materialized `databricks_job` (refresh, Evidence build, README update), which succeeded. Verified the data directly rather than trusting the green run: `MAX(detected_at)` in `gold.fct_bird_detections` was current, and the hourly detection distribution matched local time with no gap during the outage window. Nothing was lost, because the edge device and bucket sync kept running throughout.
+
+**Lesson:** Managed compute can fail to provision, so "it will wake itself up" is an assumption, not a guarantee. The three quick retries all landed inside the same bad window, so retries without backoff only help with failures that clear in seconds.
+
+**Open follow-ups:**
+- Lengthen the existing retry policy (currently 1, 2 and 4 min, spent in about 7 minutes) or accept that an outage of hours is handled by the next scheduled run and the Healthchecks alert.
+- A trivial warm-up query with a longer timeout before the real refresh, so a cold start fails fast and visibly.
+- A freshness alert on the gold tables, so "job succeeded but produced no new data" is also caught.
+
+---
+
+## 7. Telemetry sync failures: a weak uplink hidden behind healthy reachability checks
+
+**Symptom:** `telemetry_job` failed on every run from at least 7:00 PM through the next morning. Each failure lasted 41-42 seconds, and the Discord alert fired each time. The sensor reading step succeeded; the `scp` in `bronze_telemetry_sync` hit its 30-second timeout.
+
+**Investigation:** Reachability looked healthy at every layer. Ping had 0% loss, MTU with the don't-fragment flag passed at 1500 bytes, short SSH commands worked, the Pi had 20 days of uptime, and reading the 1.7 MB file locally took 9 ms. Only sustained transfers failed:
+- Pi to hub: `scp` stalled at 0 bytes, and 20 MB of data over SSH never finished. A 5 MB test moved at roughly 140-240 KB/s, with stalls.
+- Hub to Pi: 5 MB in about 3 seconds.
+- Hub to the internet: 5 MB in 0.6 seconds.
+
+Pausing the Pi's `rclone` sync improved throughput only modestly. The `flock` from incident #2 was holding, with no process pileup. The wifi-sentinel log did not exist, so it had never fired. The Pi is on Wi-Fi only (no Ethernet is possible on the roof), with link quality 45/70 at -65 dBm: usable but mediocre.
+
+**Root cause:** A slow and intermittently stalling Wi-Fi transmit path from the Pi, made visible by a pipeline design that required a synchronous 30-second pull over that path. I did not isolate the exact cause (signal, interference, or power-save behavior), because the wireless tools were not installed on the Pi.
+
+**Fix:** Moved to store-and-forward, the same pattern as bird detections.
+- The Pi snapshots `telemetry.db` every 5 minutes using SQLite's backup API (a consistent copy, not the live file) and uploads it to the bucket with `rclone`, which retries on its own. It runs under its own `flock`.
+- The hub asset now pulls from the bucket instead of using `scp`. It downloads to a temp file, runs `PRAGMA quick_check`, then replaces the bronze file with `os.replace()`, so a partial download can never corrupt it. It has a retry policy with exponential backoff and fails if the bucket copy is more than 15 minutes old, so a dead Pi cron cannot silently serve stale data.
+- Added `ConnectTimeout` and `BatchMode` to the remaining SSH call (`bme280_reading`).
+- Fixed `wifi-sentinel.sh`, which ran from a user crontab but needed root, and lacked `/usr/sbin` in cron's PATH (the same class of bug as incident #1). It now runs from root's crontab with an explicit PATH.
+- The Pi's detections `rclone` now uses `--max-age 2d`, so each run no longer re-lists every old clip. BirdNET-Go's own `usage` retention policy (80% cap) manages the Pi's disk, so no separate delete cron was added.
+
+**Result:** The snapshot carried the full history, so the bronze table had every 5-minute reading for the last 24 hours (12 per hour, no gaps), including the failure window. The `telemetry_job` run on the new bucket-based sync is green in Dagster.
+
+**Lesson:** Ping and small commands passing does not mean the link carries real data. When a pipeline depends on a pull over a weak link, move to store-and-forward instead of tuning the timeout. A caveat: the bucket is MinIO on the hub, so the Pi's upload still crosses the same Wi-Fi. The gain is that `rclone` retries on the Pi's side and a slow transfer no longer fails the Dagster run.
+
+**Open follow-up:** Bucket retention. MinIO holds every clip since August (27 GB as of Oct 31, with about 41 GB free on the hub), while the Pi prunes its own copies. Add a lifecycle rule that expires old `.wav` clips (for example, older than 90 days) before the disk fills. Leave `.db` files out of the rule, and first confirm nothing downstream reads clips from the bucket.
