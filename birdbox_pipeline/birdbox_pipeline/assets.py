@@ -21,8 +21,7 @@ LOCAL_BRONZE_PATH = "/opt/birdbox/data/bronze/telemetry.db"
 def bme280_reading(context: AssetExecutionContext) -> None:
     """Triggers a fresh BME280 sensor reading on birdedge, logged to its local SQLite table."""
     result = subprocess.run(
-        ["ssh", BIRDEDGE_HOST, f"python3 {REMOTE_LOG_SCRIPT}"],
-        capture_output=True,
+        ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes", BIRDEDGE_HOST, f"python3 {REMOTE_LOG_SCRIPT}"],        capture_output=True,
         text=True,
         timeout=30,
         check=False,
@@ -30,22 +29,6 @@ def bme280_reading(context: AssetExecutionContext) -> None:
     if result.returncode != 0:
         raise BirdboxAssetError(f"Sensor read failed: {result.stderr}")
     context.log.info(result.stdout.strip())
-
-
-@asset(deps=[bme280_reading])
-def bronze_telemetry_sync(context: AssetExecutionContext) -> None:
-    """Pulls the latest telemetry.db snapshot from birdedge into bronze on birdbox."""
-    result = subprocess.run(
-        ["scp", f"{BIRDEDGE_HOST}:{REMOTE_TELEMETRY_DB}", LOCAL_BRONZE_PATH],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise BirdboxAssetError(f"Bronze sync failed: {result.stderr}")
-    context.log.info(f"Synced telemetry.db to {LOCAL_BRONZE_PATH}")
-
 
 dbt_project_dir = "/opt/birdbox/dbt-project"
 
@@ -82,6 +65,64 @@ def bronze_birdnet_sync(context: AssetExecutionContext) -> None:
 
     s3.download_file(BIRDNET_BUCKET, BIRDNET_KEY, LOCAL_BIRDNET_BRONZE_PATH)
     context.log.info(f"Synced birdnet.db to {LOCAL_BIRDNET_BRONZE_PATH}")
+
+TELEMETRY_BUCKET = "bird-detections-raw"
+TELEMETRY_KEY = "telemetry/telemetry.db"
+
+
+@asset(
+    deps=[bme280_reading],
+    retry_policy=RetryPolicy(max_retries=3, delay=60, backoff=Backoff.EXPONENTIAL),
+)
+def bronze_telemetry_sync(context: AssetExecutionContext) -> None:
+    """Pulls the latest telemetry.db snapshot from MinIO (pushed there by birdedge's telemetry-sync cron) into bronze on birdbox."""
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=MINIO_ENDPOINT,
+        aws_access_key_id=MINIO_ACCESS_KEY,
+        aws_secret_access_key=MINIO_SECRET_KEY,
+        config=BotoConfig(
+            signature_version="s3v4",
+            s3={"addressing_style": "path"},
+            connect_timeout=10,
+            read_timeout=60,
+        ),
+    )
+    head = s3.head_object(Bucket=TELEMETRY_BUCKET, Key=TELEMETRY_KEY)
+    context.log.info(
+        f"Source telemetry.db last modified: {head['LastModified']}, size: {head['ContentLength']} bytes"
+    )
+
+    age_s = (datetime.now(timezone.utc) - head["LastModified"]).total_seconds()
+    if age_s > 900:
+        raise BirdboxAssetError(
+            f"telemetry.db in bucket is stale ({age_s/60:.0f} min old). "
+            "Check telemetry-sync cron on birdedge."
+        )
+
+    tmp_path = LOCAL_BRONZE_PATH + ".tmp"
+    try:
+        s3.download_file(TELEMETRY_BUCKET, TELEMETRY_KEY, tmp_path)
+
+        # Sanity check: must open as SQLite, pass a quick integrity check, and contain a table
+        conn = sqlite3.connect(tmp_path)
+        try:
+            if conn.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                raise BirdboxAssetError("Downloaded telemetry.db failed integrity check")
+            n_tables = conn.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table'"
+            ).fetchone()[0]
+            if n_tables == 0:
+                raise BirdboxAssetError("Downloaded telemetry.db has no tables")
+        finally:
+            conn.close()
+
+        os.replace(tmp_path, LOCAL_BRONZE_PATH)  # atomic: bronze never sees a partial file
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    context.log.info(f"Synced telemetry.db to {LOCAL_BRONZE_PATH}")
 
 
 EVIDENCE_DIR = "/opt/birdbox/field-journal"
