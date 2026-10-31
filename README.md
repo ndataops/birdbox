@@ -94,7 +94,7 @@ The original DuckDB implementation remains in `dbt-project/` as a rollback path 
 
 ## Incidents found and fixed
 
-Real production bugs, not staged for the portfolio, found while running and hardening the system. Full write-ups are in [`docs/lessons-learned.md`](docs/lessons-learned.md).
+ull write-ups are in [docs/incidents.md](docs/incidents.md) and [docs/lessons-learned.md](docs/lessons-learned.md).
 
 - **Unbounded cron stacking.** A `* * * * *` rclone sync had no lock protection; overlapping runs piled up and exhausted memory/CPU on the Pi, taking it offline. Fixed with `flock`-guarded cron.
 - **Silent 6-day pipeline outage.** After moving Dagster to systemd, `dbt` resolved by bare name on `$PATH` — which worked in an interactive shell but not under systemd's minimal environment. The entire dbt layer silently stopped running; nobody noticed until a downstream chart came up empty. Fixed with an explicit executable path.
@@ -104,11 +104,13 @@ Real production bugs, not staged for the portfolio, found while running and hard
 - **A weather join off by ~10 hours.** A time zone conversion applied to an already-naive UTC timestamp shifted telemetry, so each detection was paired with readings from the middle of the night. Found by checking a gold row against raw sensor data, and fixed in the Databricks port with a rule: UTC until gold. The same check revealed the sensor reads enclosure temperature, not ambient, so it was relabeled.
 - **A migration near-miss.** A failed `cd` let the rest of a command block write ~20 Databricks-port files into the live dbt project. Git showed the full blast radius, and it was restored with live data verified intact. The fix: chain dependent commands with `&&`, and experiment in a verified copy.
 - **Eight silent days after a power cut.** The host lost power, stayed off due to a BIOS default, and nothing alerted, because failure alerts ran on the host itself. Fixed with auto power-on, retries, and an external heartbeat (see Operations).
+- **A weak Wi-Fi uplink hidden behind healthy checks.** `telemetry_job` failed every run overnight because a synchronous `scp` from the Pi stalled on its rooftop Wi-Fi, even though ping, MTU, and SSH all looked fine. Isolated by testing each layer and direction separately, then replaced the pull with store-and-forward: the Pi pushes a consistent SQLite snapshot to the bucket every 5 minutes, and the hub validates it and swaps it in atomically. No gap in the data.
+- **Four hours of Databricks downtime.** The serverless warehouse stopped and refused to restart (`Cannot create the resource`), outlasting the retry policy. The Healthchecks.io heartbeat caught it, and no data was lost because birdedge kept buffering. The root cause (Free Edition quota vs. capacity) is unconfirmed; follow-ups are a warm-up query and a freshness alert.
 
 ## Operations
 
 - **Self-healing:** BIOS set to power on after an outage; every service runs under systemd. Verified with a deliberate reboot: services, schedules, and the next Databricks refresh all recovered with no intervention.
-- **Retries:** `databricks_refresh` retries up to 3 times with exponential backoff (1, 2, 4 minutes), riding out serverless cold starts and transient capacity errors on Free Edition.
+- **Retries:** `databricks_refresh` retries up to 3 times with exponential backoff (1, 2, 4 minutes), riding out serverless cold starts and short capacity blips on Free Edition. A multi-hour outage is covered by the next scheduled run and the heartbeat alert.
 - **Alerting, two layers:** a Dagster sensor posts failed runs to Discord, and each successful hourly run pings a Healthchecks.io heartbeat. If the pings stop for about 2 hours (host down, or Databricks failing repeatedly), Healthchecks alerts through Discord and email.
 - **Durability:** birdedge buffers detections locally and syncs every minute, so a birdbox outage delays data rather than losing it.
 
