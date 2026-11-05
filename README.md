@@ -26,9 +26,7 @@ Raspberry Pi 4, condenser mic, IP54 weatherproof enclosure, mounted on a rooftop
 
 ## What it does
 
-## What it does
-
-A Raspberry Pi in a weatherproof rooftop enclosure (`birdedge`) runs [BirdNET-Go](https://github.com/tphakala/birdnet-go) against a shotgun microphone to detect and identify bird species from live audio, alongside a BME280 sensor logging temperature, humidity, and pressure. A Lenovo ThinkCentre (`birdbox`) on the same network pulls that data on a schedule and, every hour, pushes it to **Databricks**, where dbt builds bronze/silver/gold Delta tables in Unity Catalog. A live dashboard, the "Field Journal," reads from the gold layer.
+A Raspberry Pi in a weatherproof rooftop enclosure (`birdedge`) runs [BirdNET-Go](https://github.com/tphakala/birdnet-go) against a shotgun microphone to detect and identify bird species from live audio, alongside a BME280 sensor logging temperature, humidity, and pressure. A Lenovo ThinkCentre (`birdbox`) on the same network pulls that data on a schedule and, every 3 hours, pushes it to **Databricks**, where dbt builds bronze/silver/gold Delta tables in Unity Catalog. A live dashboard, the "Field Journal," reads from the gold layer.
 
 Everything (the sensor syncs, the Databricks refresh, the dashboard rebuild, even this README's stats) runs on Dagster schedules with no manual intervention. The stack recovers from a power outage on its own: the machine powers back on, systemd restarts every service, and an external heartbeat raises an alert if it doesn't.
 
@@ -37,7 +35,7 @@ Everything (the sensor syncs, the Databricks refresh, the dashboard rebuild, eve
 - **Ingestion:** BirdNET-Go, BME280 (I2C), MinIO (S3-compatible object storage)
 - **Lakehouse:** Databricks Free Edition: Unity Catalog, Delta tables, serverless SQL warehouse
 - **Transformation:** dbt-databricks, bronze/silver/gold medallion, data tests including an automated freshness check
-- **Orchestration:** Dagster (asset-based; 5- and 10-minute ingestion, hourly Databricks refresh)
+- **Orchestration:** Dagster (asset-based; 5- and 10-minute ingestion, 3-hourly Databricks refresh)
 - **Dashboard:** Evidence.dev, static production build
 - **Infra & ops:** systemd, Tailscale Funnel (public HTTPS demo), GitHub Actions CI, Healthchecks.io heartbeat, Discord alerting
 - **Languages:** Python, SQL (Databricks SQL)
@@ -71,7 +69,7 @@ flowchart LR
   det -- "rclone, every minute" --> minio
   minio -- "bronze_birdnet_sync, 10 min" --> snap
   tel -- "bronze_telemetry_sync, 5 min" --> snap
-  snap -- "hourly: export, upload, load, dbt build" --> vol
+  snap -- "every 3 hours: export, upload, load, dbt build" --> vol
   g --> ev
   g --> readme["README live stats"]
   ev -- "Tailscale Funnel" --> pub(("Public dashboard"))
@@ -87,14 +85,14 @@ Timestamps stay in UTC through bronze and silver. Conversion to Chicago time hap
 **Orchestration**, all Dagster-scheduled:
 - `bronze_telemetry_sync`: every 5 minutes
 - `bronze_birdnet_sync`: every 10 minutes, pulling from MinIO
-- `databricks_job`: hourly at :07. `databricks_refresh` (export, upload to a UC volume, load bronze Delta, `dbt build`), then `evidence_build`, then `update_readme`
+- `databricks_job`: every 3 hours at :07. `databricks_refresh` (export, upload to a UC volume, load bronze Delta, `dbt build`), then `evidence_build`, then `update_readme`
 - `backup_job`: daily snapshot backups
 
 The original DuckDB implementation remains in `dbt-project/` as a rollback path until it's retired.
 
 ## Incidents found and fixed
 
-ull write-ups are in [docs/incidents.md](docs/incidents.md) and [docs/lessons-learned.md](docs/lessons-learned.md).
+Full write-ups are in [docs/incidents.md](docs/incidents.md) and [docs/lessons-learned.md](docs/lessons-learned.md).
 
 - **Unbounded cron stacking.** A `* * * * *` rclone sync had no lock protection; overlapping runs piled up and exhausted memory/CPU on the Pi, taking it offline. Fixed with `flock`-guarded cron.
 - **Silent 6-day pipeline outage.** After moving Dagster to systemd, `dbt` resolved by bare name on `$PATH` — which worked in an interactive shell but not under systemd's minimal environment. The entire dbt layer silently stopped running; nobody noticed until a downstream chart came up empty. Fixed with an explicit executable path.
@@ -105,13 +103,13 @@ ull write-ups are in [docs/incidents.md](docs/incidents.md) and [docs/lessons-le
 - **A migration near-miss.** A failed `cd` let the rest of a command block write ~20 Databricks-port files into the live dbt project. Git showed the full blast radius, and it was restored with live data verified intact. The fix: chain dependent commands with `&&`, and experiment in a verified copy.
 - **Eight silent days after a power cut.** The host lost power, stayed off due to a BIOS default, and nothing alerted, because failure alerts ran on the host itself. Fixed with auto power-on, retries, and an external heartbeat (see Operations).
 - **A weak Wi-Fi uplink hidden behind healthy checks.** `telemetry_job` failed every run overnight because a synchronous `scp` from the Pi stalled on its rooftop Wi-Fi, even though ping, MTU, and SSH all looked fine. Isolated by testing each layer and direction separately, then replaced the pull with store-and-forward: the Pi pushes a consistent SQLite snapshot to the bucket every 5 minutes, and the hub validates it and swaps it in atomically. No gap in the data.
-- **Four hours of Databricks downtime.** The serverless warehouse stopped and refused to restart (`Cannot create the resource`), outlasting the retry policy. The Healthchecks.io heartbeat caught it, and no data was lost because birdedge kept buffering. The root cause (Free Edition quota vs. capacity) is unconfirmed; follow-ups are a warm-up query and a freshness alert.
+- **Recurring Databricks provisioning failures.** Three times in about two weeks (Oct 19, Oct 30, Nov 5) the serverless warehouse stopped and refused to restart (`Cannot create the resource`), outlasting the retry policy. The Healthchecks.io heartbeat caught each one, and no data was lost because birdedge kept buffering. The root cause (Free Edition quota vs. capacity) is unconfirmed, so as an experiment the refresh moved from hourly to every 3 hours to cut warehouse wake-ups. Follow-ups: a warm-up query and a gold freshness alert.
 
 ## Operations
 
 - **Self-healing:** BIOS set to power on after an outage; every service runs under systemd. Verified with a deliberate reboot: services, schedules, and the next Databricks refresh all recovered with no intervention.
 - **Retries:** `databricks_refresh` retries up to 3 times with exponential backoff (1, 2, 4 minutes), riding out serverless cold starts and short capacity blips on Free Edition. A multi-hour outage is covered by the next scheduled run and the heartbeat alert.
-- **Alerting, two layers:** a Dagster sensor posts failed runs to Discord, and each successful hourly run pings a Healthchecks.io heartbeat. If the pings stop for about 2 hours (host down, or Databricks failing repeatedly), Healthchecks alerts through Discord and email.
+- **Alerting, two layers:** a Dagster sensor posts failed runs to Discord, and each successful `databricks_job` run pings a Healthchecks.io heartbeat (period 3 hours, 1 hour grace). If the pings stop for about 4 hours (host down, or Databricks failing repeatedly), Healthchecks alerts through Discord and email.
 - **Durability:** birdedge buffers detections locally and syncs every minute, so a birdbox outage delays data rather than losing it.
 
 ## Skills demonstrated

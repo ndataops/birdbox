@@ -34,7 +34,7 @@ new_block = f"""<!-- STATS:START -->
 - **Species identified:** {species}
 - **Latest detection:** {last_detection.strftime('%Y-%m-%d %H:%M')} CT
 - **Telemetry readings:** {telemetry_count:,}
-- **Last updated:** {last_telemetry.strftime('%Y-%m-%d %H:%M UTC')} (auto-generated hourly from Databricks)
+- **Last updated:** {last_telemetry.strftime('%Y-%m-%d %H:%M UTC')} (auto-generated every 3 hours from Databricks)
 <!-- STATS:END -->"""
 
 if "--dry-run" in sys.argv:

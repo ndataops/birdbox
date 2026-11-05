@@ -205,6 +205,7 @@ hole, because the Pi and the bucket sync kept running.
 - Add a cheap warm-up (`SELECT 1` with a longer timeout) so a cold start fails fast and visibly.
 - Alert on freshness of the output table, not only on job success.
 - Next time, check the Free Edition usage page before pressing Start, to tell quota from capacity.
+- Try the cheap lever first. If the platform is best-effort, cut how often you call it before adding machinery (hourly to every 3 hours), and write down the date of the next failure so the experiment has an answer. On Nov 5 no quota page, email, or warning was visible in the workspace, so "quota vs capacity" is still a guess.
 
 ## 10. Reachability isn't throughput: a weak link needs store-and-forward
 

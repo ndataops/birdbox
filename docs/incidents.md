@@ -92,6 +92,8 @@ dbt_executable
 - A trivial warm-up query with a longer timeout before the real refresh, so a cold start fails fast and visibly.
 - A freshness alert on the gold tables, so "job succeeded but produced no new data" is also caught.
 
+**Recurrence (Nov 5):** The same `BAD_REQUEST: Cannot create the resource` failure occurred again, the third time in about two weeks (Oct 19, Oct 30, Nov 5). No quota page, email, or warning appeared in the workspace, so the cause is still unconfirmed. As an experiment, `databricks_job` moved from hourly to every 3 hours to reduce warehouse wake-ups, and the Healthchecks.io check was widened to a 3-hour period with 1-hour grace. If failures continue at 3-hour spacing, that points toward capacity on Databricks' side, and the warm-up step becomes the next fix.
+
 ---
 
 ## 7. Telemetry sync failures: a weak uplink hidden behind healthy reachability checks
