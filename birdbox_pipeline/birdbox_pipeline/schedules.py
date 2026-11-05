@@ -59,5 +59,5 @@ databricks_job = define_asset_job(
 
 databricks_schedule = ScheduleDefinition(
     job=databricks_job,
-    cron_schedule="7 * * * *",
+    cron_schedule="7 */3 * * *",
 )
