@@ -141,11 +141,12 @@ Pausing the Pi's `rclone` sync improved throughput only modestly. The `flock` fr
 
 **Impact:** The Pi records nothing while it has no power, so that window is permanently lost. The telemetry table is missing 158 five-minute readings (13 hours 15 minutes), from 8:15 PM Friday Nov 6 to 9:30 AM Saturday Nov 7 Chicago time. Detections from the same window are lost too, but a count can't show that gap, because night is naturally quiet.
 
-**What worked:** The freshness test stopped dbt from building models on stale data, and the failure message identified the unreachable Pi directly.
+**Fix:** Added a success-only Healthchecks.io heartbeat to the Pi's telemetry sync (`telemetry-sync.sh`). The script stops at its first error, so the ping at the end only fires when the SQLite snapshot and the upload both succeeded. The check expects a ping every 10 minutes with a 20-minute grace period, so a dead Pi alerts to Discord and email after about 30 minutes of silence. The ping URL lives in a `chmod 600` file on the Pi, not in the repo. This covers a dead or unreachable Pi, but not the separate detections upload, which is a follow-up.
 
-**Lesson:** Nothing monitored the Pi itself. Every signal was downstream of it: failing sync runs, and a dbt freshness test with a 180-minute window. A green downstream job can mean only "I copied the last file I had." The check that matters is a heartbeat from the edge device that fires when it goes quiet, as in lesson 8: alerting can't live only on the thing it monitors, or only downstream of it.
+**What worked:** The freshness test stopped dbt from building models on stale data, and the failure message identified the unreachable Pi directly. 
+
+**Lesson:** **Lesson:** Alerts fired, but they were the wrong kind. The Dagster failure sensor posted to Discord on failed `telemetry_job` runs, but each message said only that a job failed, never that the Pi was down. Every signal was downstream of the problem: failing sync runs, and a dbt freshness test with a 180-minute window. A green downstream job can also mean only "I copied the last file I had." What was missing was a single heartbeat from the edge device that goes quiet when it dies, as in lesson 8: alerting can't live only on the thing it monitors, or only downstream of it. One "Pi silent" alert is more useful than a pile of "run failed" alerts.
 
 **Open follow-ups:**
-- Add a success-only Healthchecks.io heartbeat from the Pi's telemetry sync, so a dead Pi alerts within about half an hour.
 - Check the enclosure and cable pass-through for moisture, and note whether it rained or was humid overnight. If the outlet trips again, the cause matters more than the pipeline.
 - Sensor readings are triggered over SSH from Dagster, so any hub-to-Pi connectivity loss leaves a telemetry gap even when the Pi is healthy. Moving the reading to a cron job on the Pi itself would remove that dependency.
