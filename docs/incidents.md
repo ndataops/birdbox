@@ -121,3 +121,31 @@ Pausing the Pi's `rclone` sync improved throughput only modestly. The `flock` fr
 **Lesson:** Ping and small commands passing does not mean the link carries real data. When a pipeline depends on a pull over a weak link, move to store-and-forward instead of tuning the timeout. A caveat: the bucket is MinIO on the hub, so the Pi's upload still crosses the same Wi-Fi. The gain is that `rclone` retries on the Pi's side and a slow transfer no longer fails the Dagster run.
 
 **Open follow-up:** Bucket retention. MinIO holds every clip since August (27 GB as of Oct 31, with about 41 GB free on the hub), while the Pi prunes its own copies. Add a lifecycle rule that expires old `.wav` clips (for example, older than 90 days) before the disk fills. Leave `.db` files out of the rule, and first confirm nothing downstream reads clips from the bucket.
+
+
+---
+
+## 8. Power cut on the edge device (a tripped GFCI outlet), with nothing monitoring the Pi itself
+
+**Symptom:** `telemetry_job` failed on every run (it runs every 5 minutes), each in about 6 seconds. The 9:07 AM `databricks_job` run also failed, in `dbt build`, on `assert_telemetry_is_fresh`.
+
+**Investigation:** The error text named the problem: `bme280_reading` failed with `ssh: connect to host 10.0.0.233 port 22: No route to host`. That is a different failure from incident #7, where the connection worked and bulk transfers stalled. Checks, in order:
+- Ping returned `Destination Host Unreachable`, and the neighbor table entry for the Pi was `FAILED`.
+- A sweep of 10.0.0.1-254, looking for the Pi's MAC address, found nothing. The Pi was not on the LAN at all, which ruled out a changed IP address.
+- `databricks_job` was starting normally, so Databricks was not the cause.
+- `birdnet_job` stayed green, but it only copies whatever file is in the bucket, so a green run said nothing about whether the Pi was alive.
+
+**Root cause:** The Pi's outlet is GFCI-protected, and it had tripped, cutting power. Pressing the outlet's reset button brought the Pi straight back. What tripped it is not determined.
+
+**Recovery and verification:** After the reset, I checked the things a power cut can leave wrong: uptime showed a fresh boot, the clock was synchronized (the Pi has no battery-backed clock, so a wrong time would have corrupted timestamps), the BirdNET-Go container was healthy, cron was active with both entries present, and the thermal sentinel service was running. Then I verified from the data: the next bronze load inserted the five newest detections, and the newest telemetry reading was about 7 minutes old.
+
+**Impact:** The Pi records nothing while it has no power, so that window is permanently lost. The telemetry table is missing 158 five-minute readings (13 hours 15 minutes), from 8:15 PM Friday Nov 6 to 9:30 AM Saturday Nov 7 Chicago time. Detections from the same window are lost too, but a count can't show that gap, because night is naturally quiet.
+
+**What worked:** The freshness test stopped dbt from building models on stale data, and the failure message identified the unreachable Pi directly.
+
+**Lesson:** Nothing monitored the Pi itself. Every signal was downstream of it: failing sync runs, and a dbt freshness test with a 180-minute window. A green downstream job can mean only "I copied the last file I had." The check that matters is a heartbeat from the edge device that fires when it goes quiet, as in lesson 8: alerting can't live only on the thing it monitors, or only downstream of it.
+
+**Open follow-ups:**
+- Add a success-only Healthchecks.io heartbeat from the Pi's telemetry sync, so a dead Pi alerts within about half an hour.
+- Check the enclosure and cable pass-through for moisture, and note whether it rained or was humid overnight. If the outlet trips again, the cause matters more than the pipeline.
+- Sensor readings are triggered over SSH from Dagster, so any hub-to-Pi connectivity loss leaves a telemetry gap even when the Pi is healthy. Moving the reading to a cron job on the Pi itself would remove that dependency.
