@@ -15,7 +15,7 @@ cd /opt/birdbox
 echo "== 1/3 export + upload to volume"
 /opt/birdbox/venv/bin/python scripts/export_to_databricks.py
 echo "== 2/3 load bronze Delta tables"
-/opt/birdbox/venv-dbx/bin/python scripts/load_databricks_bronze.py
+/opt/birdbox/venv-dbx/bin/python scripts/load_databricks_bronze_merge.py
 echo "== 3/3 dbt build"
 cd /opt/birdbox/dbt-project-databricks
 /opt/birdbox/venv-dbx/bin/dbt build
