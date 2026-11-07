@@ -68,15 +68,16 @@ flowchart LR
   end
   det -- "rclone, every minute" --> minio
   minio -- "bronze_birdnet_sync, 10 min" --> snap
-  tel -- "bronze_telemetry_sync, 5 min" --> snap
-  snap -- "every 3 hours: export, upload, load, dbt build" --> vol
+  tel -- "snapshot push, 5 min" --> minio
+  minio -- "bronze_telemetry_sync, 5 min" --> snap
+  snap -- "every 3 hours: export, upload, MERGE, dbt build" --> vol
   g --> ev
   g --> readme["README live stats"]
   ev -- "Tailscale Funnel" --> pub(("Public dashboard"))
 ```
 
 **Medallion layers** in Unity Catalog (`birdbox` catalog):
-- **Bronze:** raw Delta tables loaded from birdedge snapshots (BirdNET-Go detections via MinIO, BME280 readings via direct pull)
+- **Bronze:** raw Delta tables loaded from birdedge snapshots (BirdNET-Go detections and BME280 readings, both via MinIO). Detections and telemetry are upserted with `MERGE` (see Operations); the small reference tables are replaced.
 - **Silver:** cleaned, deduplicated, typed (`int_bird_detections_cleaned`, `int_telemetry_cleaned`)
 - **Gold:** analytics-ready facts (`fct_bird_detections`, `fct_detections_with_weather`, a nearest-15-minute join between detections and enclosure readings)
 
@@ -85,7 +86,7 @@ Timestamps stay in UTC through bronze and silver. Conversion to Chicago time hap
 **Orchestration**, all Dagster-scheduled:
 - `bronze_telemetry_sync`: every 5 minutes
 - `bronze_birdnet_sync`: every 10 minutes, pulling from MinIO
-- `databricks_job`: every 3 hours at :07. `databricks_refresh` (export, upload to a UC volume, load bronze Delta, `dbt build`), then `evidence_build`, then `update_readme`
+- `databricks_job`: every 3 hours at :07. `databricks_refresh` (export, upload to a UC volume, MERGE into bronze Delta, `dbt build`), then `evidence_build`, then `update_readme`
 - `backup_job`: daily snapshot backups
 
 The original DuckDB implementation remains in `dbt-project/` as a rollback path until it's retired.
@@ -111,6 +112,7 @@ Full write-ups are in [docs/incidents.md](docs/incidents.md) and [docs/lessons-l
 - **Retries:** `databricks_refresh` retries up to 3 times with exponential backoff (1, 2, 4 minutes), riding out serverless cold starts and short capacity blips on Free Edition. A multi-hour outage is covered by the next scheduled run and the heartbeat alert.
 - **Alerting, two layers:** a Dagster sensor posts failed runs to Discord, and each successful `databricks_job` run pings a Healthchecks.io heartbeat (period 3 hours, 1 hour grace). If the pings stop for about 4 hours (host down, or Databricks failing repeatedly), Healthchecks alerts through Discord and email.
 - **Durability:** birdedge buffers detections locally and syncs every minute, so a birdbox outage delays data rather than losing it.
+- **Idempotent loads:** `detections` and `raw_telemetry` are loaded into bronze with `MERGE INTO` on a stable key (detection `id`, reading timestamp). Unchanged rows are left alone, changed rows are updated, and rows missing from the snapshot are deleted, so a rerun is a no-op. The source is deduplicated first, an empty or truncated snapshot (under 90% of current rows) is refused before the delete clause can run, and changes are detected with null-safe comparison. Verified by breaking a clone on purpose (missing rows, a changed value, a fake row) and checking each run repaired exactly that, then confirming a rerun changed nothing. A run with five new detections wrote five rows (about 4.7 KB) instead of rewriting the table (about 286 KB).
 
 ## Skills demonstrated
 
@@ -121,7 +123,7 @@ Full write-ups are in [docs/incidents.md](docs/incidents.md) and [docs/lessons-l
 - **Observability:** Discord failure alerting, self-updating documentation, Healthchecks.io heartbeat
 - **Data engineering judgment:** root-caused multiple production incidents, made and documented a privacy-vs-feature tradeoff decision
 - **Full-stack delivery:** live public dashboard (Evidence.dev), interactive data catalog (dbt docs), physical IoT hardware
-- **Cloud lakehouse:** Databricks (Unity Catalog, Delta, serverless SQL), migrated from DuckDB with parity verification
+- **Cloud lakehouse:** Databricks (Unity Catalog, Delta, serverless SQL), migrated from DuckDB with parity verification; idempotent `MERGE` loads tested for insert, update, delete, and rerun
 
 ## Roadmap
 - Incremental loads (MERGE) in place of full rebuilds

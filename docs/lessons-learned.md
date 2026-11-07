@@ -229,6 +229,44 @@ and the Dagster run is green.
   guessing.
 - Don't
 
+## 11. A MERGE that reports zeros hasn't proven anything yet
+
+**What happened (Nov 7):** the bronze load for `detections` and `raw_telemetry` was a `CREATE OR REPLACE TABLE ... AS SELECT` of the full snapshot on every run. I replaced it with a `MERGE INTO` keyed on `id` (detections) and `recorded_at` (telemetry). The first test against a fresh clone reported zero inserted, updated, and deleted. That looked like success, but source and target were identical, so even a broken MERGE would have returned zeros.
+
+**How it was proven:** break a clone on purpose and check the MERGE repairs exactly what was broken.
+- Deleted the 5 newest rows from the clone: the MERGE inserted exactly 5.
+- Changed one `confidence` value: it updated exactly 1 and restored the source value.
+- Added a fake row with an id that isn't in the source: it deleted exactly 1.
+- Reran after each repair: all zeros, so the load is idempotent.
+
+In production, the first MERGE inserted the 5 new detections and added about 4.7 KB. The old full replace rewrote about 286 KB on every run. A second production run changed nothing.
+
+**Design choices:**
+- MERGE only the event tables. `labels` and `ebird_taxonomy` are small reference lists, so a full replace stays simpler and correct.
+- Port the old behavior first: the replace mirrored deletions, so the MERGE has `WHEN NOT MATCHED BY SOURCE THEN DELETE`.
+- Guard the delete: refuse to MERGE if the snapshot is empty or under 90% of the current row count, so a bad export can't wipe the table.
+- Deduplicate the source on the key, because a MERGE errors when two source rows match one target row.
+- Detect changes with null-safe comparison (`<=>`), so only really-changed rows are rewritten and NULLs compare correctly.
+- Test against `_merge_test` clones with a `--test` flag, and keep the old loader in the repo as the rollback.
+
+**Limits to remember:**
+- The export still ships a full snapshot every run, so the MERGE reduces what is written to Delta, not what is transferred. A truly incremental export is the next step, and it would mean rethinking the delete clause and the 90% guard.
+- A MERGE targets the existing table, so a new source column fails the load, where the old replace absorbed it silently.
+
+**Rules:**
+- A test that can't fail proves nothing. Mutate a copy and check the tool repairs exactly the damage.
+- Add a sanity guard in front of any destructive clause that depends on the input being complete.
+- Read the Delta history (`DESCRIBE HISTORY`) after the first production run: the operation should say `MERGE` and the metrics should match expectations.
+
+## 12. Don't retry a failure that can't succeed
+
+**What happened (Nov 7):** the Pi lost power overnight, so telemetry stopped arriving. The 9:07 AM `databricks_job` run reached `dbt build` and failed `assert_telemetry_is_fresh`, which is the freshness test doing its job: it stopped models from being built on stale data. But the retry policy reran the whole script three more times (export, load, dbt build). Delta history shows three identical rewrites of `detections` about 10 minutes apart (versions 454 to 456), each with the same 18,474 rows. That's consistent with the retries, and each one spent warehouse time on a failure that could not succeed.
+
+**Rules:**
+- Retry connection and provisioning errors (for example `Cannot create the resource`). Don't retry a failed data test.
+- The freshness window is 180 minutes, so that test only trips after about three hours of silence. A heartbeat from the Pi would catch a dead edge device much sooner.
+
+**Follow-up (not done yet):** make dbt test failures non-retryable, so only connection errors consume retries.
 
 ## Takeaway
 
@@ -240,3 +278,5 @@ and the Dagster run is green.
 - **Monitoring can't live only inside what it monitors.** In-process alerts catch failing jobs, not a dead host; an external heartbeat catches both. Pair it with self-healing defaults: firmware that powers back on, and retries for transient cloud errors (lesson 8).
 - **A retry budget must outlast the outage.** Retries cover blips, not hours-long capacity failures; pair them with a warm-up step and a freshness alert (lesson 9).
 - **Reachable isn't fast.** Ping and small commands can pass while bulk transfers stall; test real throughput, and move weak links off the critical path with store-and-forward (lesson 10).
+- **Prove a MERGE by breaking a copy.** Zeros on an identical clone prove nothing; delete rows, change a value, add a fake row, and check each repair (lesson 11).
+- **Don't retry what can't succeed.** Retries are for connection and capacity errors; a failed data test will fail the same way every time (lesson 12).
