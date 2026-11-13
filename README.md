@@ -43,11 +43,11 @@ Everything (the sensor syncs, the Databricks refresh, the dashboard rebuild, eve
 <!-- STATS:START -->
 ## Live stats
 
-- **Detections:** 15,562
+- **Detections:** 15,569
 - **Species identified:** 146
-- **Latest detection:** 2026-11-13 11:34 CT
-- **Telemetry readings:** 19,005
-- **Last updated:** 2026-11-13 17:55 UTC (auto-generated every 3 hours from Databricks)
+- **Latest detection:** 2026-11-13 14:49 CT
+- **Telemetry readings:** 19,041
+- **Last updated:** 2026-11-13 20:55 UTC (auto-generated every 3 hours from Databricks)
 <!-- STATS:END -->
 
 ### Architecture
