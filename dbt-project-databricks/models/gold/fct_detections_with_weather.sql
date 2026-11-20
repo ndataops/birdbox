@@ -1,4 +1,9 @@
-{{ config(materialized='table') }}
+{{ config(
+    materialized='incremental',
+    incremental_strategy='merge',
+    unique_key='detection_id',
+    on_schema_change='fail'
+) }}
 
 -- Pairs each detection with the nearest enclosure reading within 15 minutes.
 -- The match happens in UTC on both sides; detected_at in the output is Chicago local time.
@@ -14,6 +19,15 @@ WITH detections AS (
     FROM {{ ref('fct_bird_detections') }} f
     JOIN {{ ref('int_bird_detections_cleaned') }} u
         ON f.detection_id = u.detection_id
+    {% if is_incremental() %}
+    WHERE f.detected_at >= (
+        SELECT COALESCE(
+            MAX(detected_at) - INTERVAL {{ var('incremental_lookback_days', 2) }} DAY,
+            CAST('1900-01-01' AS TIMESTAMP_NTZ)
+        )
+        FROM {{ this }}
+    )
+    {% endif %}
 ),
 
 telemetry AS (

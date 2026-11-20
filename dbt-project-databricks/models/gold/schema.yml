@@ -55,14 +55,23 @@ models:
                 field: detection_id
       - name: detected_at
         data_type: timestamp_ntz
+        tests:
+          - not_null
       - name: common_name
         data_type: string
+        tests:
+          - not_null
       - name: scientific_name
         data_type: string
       - name: confidence_score
         data_type: double
       - name: confidence_tier
         data_type: string
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['High', 'Medium', 'Low']
       - name: enclosure_temp_f
         data_type: double
       - name: enclosure_humidity_pct
