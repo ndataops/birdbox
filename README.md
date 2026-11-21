@@ -36,7 +36,7 @@ Everything (the sensor syncs, the Databricks refresh, the dashboard rebuild, eve
 - **Lakehouse:** Databricks Free Edition: Unity Catalog, Delta tables, serverless SQL warehouse
 - **Transformation:** dbt-databricks, bronze/silver/gold medallion, data tests including an automated freshness check
 - **Orchestration:** Dagster (asset-based; 5- and 10-minute ingestion, 3-hourly Databricks refresh)
-- **Dashboard:** Evidence.dev, static production build
+- **Dashboards:** Evidence.dev static production build (public demo); Databricks AI/BI dashboard on a Unity Catalog metric view
 - **Infra & ops:** systemd, Tailscale Funnel (public HTTPS demo), GitHub Actions CI, Healthchecks.io heartbeat, Discord alerting
 - **Languages:** Python, SQL (Databricks SQL)
 
@@ -91,6 +91,12 @@ Timestamps stay in UTC through bronze and silver. Conversion to Chicago time hap
 
 The original DuckDB implementation remains in `dbt-project/` as a rollback path until it's retired.
 
+## Engineering practices
+
+- **CI on every pull request:** GitHub Actions runs `dbt build` (models, seed and 28 data tests) against Databricks in an isolated per-PR schema (`ci_pr_<n>_*`) and drops it afterward. The live-sensor freshness test runs against production instead, since it depends on current data. A custom `generate_schema_name` macro keeps CI writes out of production schemas.
+- **Incremental model:** `fct_detections_with_weather` is a dbt incremental model using the `merge` strategy on `detection_id`, with a 2-day lookback to absorb late-arriving sensor readings and backfilled detections. CI re-runs it and asserts the row count and checksum are unchanged.
+- **Metric layer:** `databricks/metric_views/mv_detections.sql` defines the KPIs (detection count, distinct species, high-confidence rate, average confidence, average enclosure temperature) once as a Unity Catalog metric view. The Databricks AI/BI dashboard queries it with `MEASURE()`.
+
 ## Incidents found and fixed
 
 Full write-ups are in [docs/incidents.md](docs/incidents.md) and [docs/lessons-learned.md](docs/lessons-learned.md).
@@ -118,16 +124,17 @@ Full write-ups are in [docs/incidents.md](docs/incidents.md) and [docs/lessons-l
 ## Skills demonstrated
 
 - **Orchestration:** Dagster (asset-based scheduling, sensors, run-failure alerting)
-- **Transformation & data quality:** dbt (medallion architecture, 23 tests, enforced data contracts, freshness checks)
-- **CI/CD:** GitHub Actions on every PR: `dbt parse` of the Databricks project (models, refs, tests, YAML) and ruff linting of the Dagster pipeline
+- **Transformation & data quality:** dbt (medallion architecture, 29 data tests, enforced data contracts, incremental merge models, freshness checks)
+- **CI/CD:** GitHub Actions on every PR: `dbt parse`, ruff linting of the Dagster pipeline, and a full `dbt build` with tests against Databricks in an isolated per-PR schema, plus a re-run check that the incremental model is idempotent
 - **Infrastructure reliability:** systemd service supervision, automated backups, reboot-tested on real hardware
 - **Observability:** Discord failure alerting, self-updating documentation, Healthchecks.io heartbeat
 - **Data engineering judgment:** root-caused multiple production incidents, made and documented a privacy-vs-feature tradeoff decision
 - **Full-stack delivery:** live public dashboard (Evidence.dev), interactive data catalog (dbt docs), physical IoT hardware
 - **Cloud lakehouse:** Databricks (Unity Catalog, Delta, serverless SQL), migrated from DuckDB with parity verification; idempotent `MERGE` loads tested for insert, update, delete, and rerun
+- **Semantic layer & BI:** Unity Catalog metric views defining the KPIs once, with a Databricks AI/BI dashboard built on them
 
 ## Roadmap
-- Incremental loads (MERGE) in place of full rebuilds
+- Declarative deployment with Databricks Asset Bundles and Unity Catalog grants
 - Retire the DuckDB rollback path
 - Natural-language query layer over the lakehouse
 - Reusable "lakehouse spine" for sibling projects (air quality, transit, pollinators)
